@@ -107,6 +107,11 @@ h1 { font-family: var(--serif); font-weight: 600; letter-spacing: -.01em; font-s
 .space-head .desc { color: var(--ink-soft); font-size: 14.5px; margin: 12px 0 0; max-width: 70ch; }
 .space-head .facts { margin-top: 12px; }
 
+/* --- Ressources de l'espace (Drive, présentation) --- */
+.resources { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.resources .btn { text-decoration: none; }
+.resources .btn:hover { text-decoration: none; }
+
 /* --- Information complémentaire du jour --- */
 .daily { margin-top: 16px; border-top: 1px dashed var(--line); padding-top: 14px; }
 .daily label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }

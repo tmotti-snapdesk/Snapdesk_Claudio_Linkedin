@@ -83,6 +83,10 @@
           </div>
           <div class="facts">${facts.join('')}${dispo}</div>
           ${fmt(s.description) ? `<p class="desc">${esc(s.description)}</p>` : ''}
+          ${(fmt(s.drive) || fmt(s.presentation)) ? `<div class="resources">
+            ${fmt(s.drive) ? `<a class="btn small resource-btn" href="${esc(s.drive)}" target="_blank" rel="noopener noreferrer">📸 Photos &amp; Vidéos</a>` : ''}
+            ${fmt(s.presentation) ? `<button class="btn small" id="copy-presentation">📄 Copier le lien de présentation</button>` : ''}
+          </div>` : ''}
           <div class="daily">
             <label for="daily-note">📌 Information complémentaire du jour <span>— oriente les posts générés ci-dessous (actualité, promo, événement, angle du jour…)</span></label>
             <textarea id="daily-note" placeholder="Ex. : canicule aujourd'hui → insister sur la clim et les terrasses · ou « portes ouvertes jeudi », « -1 mois offert cette semaine », « nouvelle photo dispo »…"></textarea>
@@ -90,6 +94,9 @@
           </div>
         </div>`;
       document.getElementById('reload-space').addEventListener('click', reloadSpace);
+      // Lien de présentation : bouton "copier".
+      const cp = document.getElementById('copy-presentation');
+      if (cp) cp.addEventListener('click', () => copyText(SPACE.presentation, '✓ Lien de présentation copié'));
       // Note du jour : pré-remplie depuis le stockage, sauvegardée à la frappe.
       const dn = document.getElementById('daily-note');
       if (dn) {
@@ -192,14 +199,14 @@
       actions.querySelector('.regen').addEventListener('click', () => generateOne(com.key));
     }
 
-    async function copyText(text) {
+    async function copyText(text, msg = '✓ Post copié') {
       try {
         await navigator.clipboard.writeText(text);
-        toast('✓ Post copié');
+        toast(msg);
       } catch {
         const ta = document.createElement('textarea');
         ta.value = text; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); toast('✓ Post copié'); } catch { toast('Copie impossible'); }
+        try { document.execCommand('copy'); toast(msg); } catch { toast('Copie impossible'); }
         ta.remove();
       }
     }
