@@ -15,7 +15,10 @@
         <h1>Espaces à promouvoir</h1>
         <p class="lede">Chaque espace de ta base est listé ici. Ouvre-en un pour récupérer le post LinkedIn de chaque commercial, prêt à copier-coller.</p>
       </div>
-      <span id="source-badge" class="badge sample" title="Source des données">…</span>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:10px;">
+        <span class="userbar" id="userbar"></span>
+        <span id="source-badge" class="badge sample" title="Source des données">…</span>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -30,7 +33,11 @@
 
   <div id="toast" class="toast"></div>
 
+  <script src="/assets/auth.js"></script>
   <script>
+    if (!Auth.requireAuth()) { throw new Error('redirect'); }
+    Auth.renderUserBar(document.getElementById('userbar'));
+
     const fmt = (s) => (s == null ? '' : String(s)).trim();
     const esc = (t) => fmt(t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -75,7 +82,7 @@
       content.className = 'loading';
       content.textContent = 'Chargement des espaces…';
       try {
-        const res = await fetch('/api/spaces', { cache: 'no-store' });
+        const res = await Auth.fetch('/api/spaces', { cache: 'no-store' });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Erreur inconnue');
         ALL = data.spaces || [];

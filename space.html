@@ -9,35 +9,28 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="crumb"><a href="/">← Tous les espaces</a></div>
+    <div class="crumb" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+      <a href="/">← Tous les espaces</a>
+      <span class="userbar" id="userbar"></span>
+    </div>
     <div id="head"></div>
     <div id="posts-zone"></div>
   </div>
 
-  <!-- Modal secret -->
-  <div id="modal-bg" class="modal-bg">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <h3 id="modal-title">Secret API</h3>
-      <p>Entre le secret partagé (<code style="font-family:var(--mono)">API_SECRET</code>) pour autoriser la génération des posts. Il reste stocké dans cet onglet uniquement.</p>
-      <input id="secret-input" type="password" placeholder="API_SECRET…" autocomplete="off">
-      <div class="modal-actions">
-        <button id="secret-cancel" class="btn">Annuler</button>
-        <button id="secret-ok" class="btn brass">Valider</button>
-      </div>
-    </div>
-  </div>
-
   <div id="toast" class="toast"></div>
 
+  <script src="/assets/auth.js"></script>
   <script>
+    if (!Auth.requireAuth()) { throw new Error('redirect'); }
+    Auth.renderUserBar(document.getElementById('userbar'));
+
     // --- Config commerciaux (ordre = affichage) ---
     const COMS = [
-      { key: 'ronan',   name: 'Ronan',   role: 'CEO · Snapdesk',                    color: '#B67A2E' },
-      { key: 'melanie', name: 'Mélanie', role: 'Business Developer · Snapdesk',     color: '#2E7D57' },
-      { key: 'florian', name: 'Florian', role: 'Business Developer · Snapdesk',     color: '#3A6EA5' },
+      { key: 'ronan',   name: 'Ronan',   role: 'CEO · Snapdesk',                        color: '#B67A2E' },
+      { key: 'melanie', name: 'Mélanie', role: 'Business Developer · Snapdesk',         color: '#2E7D57' },
+      { key: 'florian', name: 'Florian', role: 'Business Developer · Snapdesk',         color: '#3A6EA5' },
       { key: 'thomas',  name: 'Thomas',  role: 'Head of Marketing & Growth · Snapdesk', color: '#9B4D6E' },
     ];
-    const SECRET_KEY = 'snapdesk_api_secret';
 
     const fmt = (s) => (s == null ? '' : String(s)).trim();
     const esc = (t) => fmt(t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -53,42 +46,6 @@
       el.textContent = msg; el.classList.add('show');
       clearTimeout(toastT);
       toastT = setTimeout(() => el.classList.remove('show'), 1800);
-    }
-
-    // ---------- Secret (modal) ----------
-    function getSecret() { return sessionStorage.getItem(SECRET_KEY); }
-    function askSecret() {
-      return new Promise((resolve) => {
-        const bg = document.getElementById('modal-bg');
-        const input = document.getElementById('secret-input');
-        input.value = getSecret() || '';
-        bg.classList.add('show');
-        input.focus();
-        const done = (val) => {
-          bg.classList.remove('show');
-          okBtn.removeEventListener('click', onOk);
-          cancelBtn.removeEventListener('click', onCancel);
-          input.removeEventListener('keydown', onKey);
-          resolve(val);
-        };
-        const onOk = () => {
-          const v = fmt(input.value);
-          if (v) sessionStorage.setItem(SECRET_KEY, v);
-          done(v || null);
-        };
-        const onCancel = () => done(null);
-        const onKey = (e) => { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); };
-        const okBtn = document.getElementById('secret-ok');
-        const cancelBtn = document.getElementById('secret-cancel');
-        okBtn.addEventListener('click', onOk);
-        cancelBtn.addEventListener('click', onCancel);
-        input.addEventListener('keydown', onKey);
-      });
-    }
-    async function ensureSecret() {
-      let s = getSecret();
-      if (!s) s = await askSecret();
-      return s;
     }
 
     // ---------- Chargement de l'espace ----------
@@ -113,7 +70,7 @@
               <p class="eyebrow">Espace</p>
               <h1>${esc(s.espace)}</h1>
             </div>
-            <button id="reload-space" class="btn primary" title="Relit les infos Excel de cet espace et régénère les posts">↻ Recharger l'espace</button>
+            <button id="reload-space" class="btn primary" title="Relit les infos de l'espace et régénère les posts">↻ Recharger l'espace</button>
           </div>
           <div class="facts">${facts.join('')}${dispo}</div>
           ${fmt(s.description) ? `<p class="desc">${esc(s.description)}</p>` : ''}
@@ -122,7 +79,7 @@
     }
 
     async function fetchSpace() {
-      const res = await fetch('/api/spaces', { cache: 'no-store' });
+      const res = await Auth.fetch('/api/spaces', { cache: 'no-store' });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'Erreur /api/spaces');
       const found = (data.spaces || []).find(x => x.id === SPACE_ID);
@@ -163,7 +120,6 @@
       if (!card) return;
       const body = card.querySelector('.post-body');
       const actions = card.querySelector('.post-actions');
-      // Nettoie l'ancien statut
       const old = card.querySelector('.post-status');
       if (old) old.remove();
 
@@ -186,7 +142,6 @@
         bodyHtml = 'Aucun contenu.';
       }
       body.innerHTML = bodyHtml;
-      // Réinsère le statut avant les actions
       actions.insertAdjacentHTML('beforebegin', statusHtml);
 
       actions.innerHTML =
@@ -203,7 +158,6 @@
         await navigator.clipboard.writeText(text);
         toast('✓ Post copié');
       } catch {
-        // Fallback
         const ta = document.createElement('textarea');
         ta.value = text; document.body.appendChild(ta); ta.select();
         try { document.execCommand('copy'); toast('✓ Post copié'); } catch { toast('Copie impossible'); }
@@ -222,18 +176,11 @@
     }
 
     async function callGenerate(commercials) {
-      const secret = await ensureSecret();
-      if (!secret) { toast('Secret requis pour générer'); return null; }
-      const res = await fetch('/api/generate', {
+      const res = await Auth.fetch('/api/generate', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-api-secret': secret },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ space: spacePayload(), commercials }),
       });
-      if (res.status === 401) {
-        sessionStorage.removeItem(SECRET_KEY);
-        toast('Secret invalide — réessaie');
-        return null;
-      }
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`);
       return data.posts || {};
@@ -248,10 +195,6 @@
         document.getElementById('posts-zone').innerHTML = `<div class="error-box">Génération impossible : ${esc(err.message)}</div>`;
         return;
       }
-      if (!posts) { // secret manquant/invalide
-        COMS.forEach(c => fillCard(c, { error: 'Génération annulée (secret manquant). Clique “Régénérer”.' }));
-        return;
-      }
       COMS.forEach(c => fillCard(c, posts[c.key]));
     }
 
@@ -263,7 +206,6 @@
       if (old) old.remove();
       try {
         const posts = await callGenerate([key]);
-        if (!posts) { fillCard(com, { error: 'Secret manquant/invalide.' }); return; }
         fillCard(com, posts[key]);
         if (posts[key] && posts[key].post && !posts[key].skipped && !posts[key].error) toast('Nouveau post généré');
       } catch (err) {
@@ -271,15 +213,15 @@
       }
     }
 
-    // ---------- Recharger l'espace (relit l'Excel + régénère) ----------
+    // ---------- Recharger l'espace (relit les infos + régénère) ----------
     async function reloadSpace() {
       const btn = document.getElementById('reload-space');
       if (btn) { btn.disabled = true; btn.textContent = '↻ Rechargement…'; }
       try {
-        SPACE = await fetchSpace();     // relit les infos de l'Excel
+        SPACE = await fetchSpace();
         renderHead();
         toast('Infos espace relues');
-        await generateAll();            // régénère les posts
+        await generateAll();
       } catch (err) {
         document.getElementById('posts-zone').innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
       }

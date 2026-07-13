@@ -140,7 +140,25 @@ h1 { font-family: var(--serif); font-weight: 600; letter-spacing: -.01em; font-s
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 13.5px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* --- Modal secret --- */
+/* --- Barre utilisateur --- */
+.userbar { display: inline-flex; align-items: center; gap: 12px; font-size: 13px; color: var(--taupe); }
+.userbar-name { font-weight: 600; color: var(--ink-soft); }
+
+/* --- Page login --- */
+.login-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 32px; }
+.login-card .eyebrow { text-align: center; }
+.login-card h1 { font-size: 26px; text-align: center; margin: 0 0 4px; }
+.login-card .sub { text-align: center; color: var(--taupe); font-size: 13.5px; margin: 0 0 24px; }
+.login-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.login-field label { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--taupe); font-weight: 600; }
+.login-field input { font-family: var(--sans); font-size: 15px; color: var(--ink); background: var(--paper-2); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; }
+.login-field input:focus { outline: 2px solid var(--brass); outline-offset: 1px; border-color: transparent; }
+.login-card .btn { width: 100%; justify-content: center; margin-top: 6px; }
+.login-error { background: var(--red-soft); color: var(--red); border: 1px solid var(--red); border-radius: 10px; padding: 10px 13px; font-size: 13.5px; margin-bottom: 16px; display: none; }
+.login-error.show { display: block; }
+
+/* --- Modal secret (legacy, non utilisé) --- */
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 40; }
 .modal-bg.show { display: flex; }
 .modal { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; max-width: 420px; width: 100%; }

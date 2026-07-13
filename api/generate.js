@@ -16,6 +16,7 @@
 
 import { COMMERCIALS, COMMERCIAL_KEYS, getCommercial } from '../lib/commercials/index.js';
 import { generatePost, MODEL } from '../lib/llm.js';
+import { requireAuth } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,15 +24,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'Méthode non autorisée' });
   }
 
-  // --- Authentification par secret partagé ---
-  const provided = req.headers['x-api-secret'];
-  const expected = process.env.API_SECRET;
-  if (!expected) {
-    return res.status(500).json({ ok: false, error: 'API_SECRET non configuré côté serveur' });
-  }
-  if (!provided || provided !== expected) {
-    return res.status(401).json({ ok: false, error: 'Secret invalide' });
-  }
+  // --- Authentification par session (login pseudo + mot de passe) ---
+  if (!requireAuth(req, res)) return;
 
   // --- Parsing du corps (Vercel parse déjà le JSON, mais on gère la string au cas où) ---
   let payload = req.body;

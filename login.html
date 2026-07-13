@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snapdesk LinkedIn — Connexion</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏢%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="login-screen">
+    <form class="login-card" id="login-form" autocomplete="on">
+      <p class="eyebrow">Snapdesk · Générateur LinkedIn</p>
+      <h1>Connexion</h1>
+      <p class="sub">Outil interne. Accès réservé.</p>
+
+      <div class="login-error" id="error"></div>
+
+      <div class="login-field">
+        <label for="username">Pseudo</label>
+        <input id="username" name="username" type="text" inputmode="email" autocomplete="username" placeholder="ton pseudo" required autofocus>
+      </div>
+      <div class="login-field">
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="ton mot de passe" required>
+      </div>
+
+      <button class="btn brass" id="submit" type="submit">Se connecter</button>
+    </form>
+  </div>
+
+  <script src="/assets/auth.js"></script>
+  <script>
+    // Déjà connecté ? on va directement à l'app.
+    if (Auth.token()) location.replace('/');
+
+    const form = document.getElementById('login-form');
+    const errBox = document.getElementById('error');
+    const btn = document.getElementById('submit');
+
+    function showError(msg) { errBox.textContent = msg; errBox.classList.add('show'); }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.classList.remove('show');
+      btn.disabled = true; btn.textContent = 'Connexion…';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          showError(data.error || 'Identifiants invalides');
+          btn.disabled = false; btn.textContent = 'Se connecter';
+          return;
+        }
+        Auth.setSession(data.token, data.user);
+        location.replace('/');
+      } catch (err) {
+        showError('Erreur réseau — réessaie.');
+        btn.disabled = false; btn.textContent = 'Se connecter';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -34,10 +34,17 @@ un Google Sheet.
    | Nom | Valeur |
    |---|---|
    | `GEMINI_API_KEY` | ta clé Google Gemini `AIza...` (https://aistudio.google.com/apikey) |
-   | `API_SECRET` | une longue chaîne aléatoire que tu inventes |
-   | `MODEL` *(optionnel)* | `gemini-2.0-flash` par défaut |
+   | `APP_USER` | le pseudo du **seul** compte autorisé à utiliser l'app |
+   | `APP_PASSWORD` | le mot de passe de ce compte (choisis-le fort) |
+   | `SESSION_SECRET` *(optionnel)* | longue chaîne aléatoire pour signer les sessions (`openssl rand -hex 32`). Si absent, dérivé de `APP_PASSWORD`. |
+   | `MODEL` *(optionnel)* | `gemini-2.5-flash-lite` par défaut (dispo en offre gratuite) |
    | `LLM_PROVIDER` *(optionnel)* | `gemini` par défaut. Mets `anthropic` (+ `ANTHROPIC_API_KEY`) pour repasser sur Claude. |
    | `SHEET_CSV_URL` *(optionnel)* | URL CSV publiée de ton Google Sheet, pour la mini app web (voir §1bis). Sans elle, la mini app affiche un jeu de données d'exemple. |
+
+   > 🔐 **Connexion** : l'app est protégée par un **login pseudo + mot de passe** (un
+   > seul compte, défini par `APP_USER` / `APP_PASSWORD`). Aucune inscription libre —
+   > personne ne peut se connecter avec d'autres identifiants. Ces valeurs restent
+   > **uniquement** dans Vercel, jamais dans le code.
 
 5. Déploie. Note l'URL du projet, ex. `https://snapdesk-linkedin.vercel.app`.
    → Ton endpoint est donc `https://snapdesk-linkedin.vercel.app/api/generate`.
@@ -58,8 +65,10 @@ interface web** servie par le même déploiement Vercel :
   format ne te plaît pas). Le bouton **↻ Recharger l'espace** relit les infos de
   la base pour cet espace **et** régénère les posts.
 
-À la première génération, l'interface te demande le **secret** (`API_SECRET`),
-stocké uniquement dans l'onglet courant, puis envoyé au backend (`x-api-secret`).
+L'app s'ouvre sur une **page de connexion** (`/login.html`). Après login, un jeton
+de session est stocké dans le navigateur et envoyé au backend (`Authorization: Bearer`).
+Un bouton **Déconnexion** est disponible en haut de l'app. Un seul compte existe
+(`APP_USER` / `APP_PASSWORD`).
 
 ### D'où viennent les espaces ? (la « BDD Excel »)
 
@@ -139,9 +148,10 @@ Puis **redéploie sur Vercel** (un `git push` suffit si le projet est lié à Gi
 
 ## 5. Réglages utiles
 
-- **Changer de modèle** : variable d'env `MODEL` (Gemini : `gemini-2.0-flash` défaut,
-  `gemini-2.5-flash` / `gemini-3-flash` pour + de qualité). Pour changer de fournisseur,
-  `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` (modèles `claude-sonnet-5`, `claude-opus-4-8`).
+- **Changer de modèle** : variable d'env `MODEL`. Défaut `gemini-2.5-flash-lite`
+  (offre gratuite). Selon les quotas de ta clé, tu peux essayer `gemini-flash-latest`
+  ou, avec un compte facturé, `gemini-2.0-flash` / `gemini-3-flash`. Pour changer de
+  fournisseur, `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` (`claude-sonnet-5`…).
 - **Où s'écrivent les posts** : par défaut, 4 colonnes sur la même ligne. Pour basculer vers
   un onglet-journal (une ligne par post, avec historique), c'est une petite adaptation du
   `Code.gs` — dis-moi si tu préfères ce mode.
@@ -154,7 +164,9 @@ Puis **redéploie sur Vercel** (un `git push` suffit si le projet est lié à Gi
 
 | Symptôme | Piste |
 |---|---|
-| `Secret invalide` (401) | La valeur du menu 🔑 ≠ `API_SECRET` sur Vercel. |
+| `Identifiants invalides` (401) au login | Pseudo/mot de passe ≠ `APP_USER` / `APP_PASSWORD` sur Vercel. |
+| `Connexion non configurée côté serveur` (500) | `APP_USER` / `APP_PASSWORD` absents sur Vercel (ou pas redéployé). |
+| Renvoyé sans arrêt vers la page de login | Session expirée (12 h) ou `SESSION_SECRET` modifié après émission du jeton → reconnecte-toi. |
 | `BACKEND_URL non configurée` | Tu as laissé `TON-PROJET` dans `Code.gs`. |
 | `Onglet "Espaces" introuvable` | `CONFIG.SHEET_NAME` ≠ nom réel de l'onglet. |
 | Rien ne se passe en cochant | L'étape ⚙️ *Installer / Configurer* n'a pas été faite (trigger absent). |
@@ -167,14 +179,18 @@ Puis **redéploie sur Vercel** (un `git push` suffit si le projet est lié à Gi
 
 ```
 snapdesk-linkedin/
+├── login.html               # mini app : page de connexion (pseudo + mdp)
 ├── index.html               # mini app : liste des espaces
 ├── space.html               # mini app : posts d'un espace (copier / régénérer)
 ├── assets/
-│   └── styles.css           # styles de la mini app (thème clair + sombre)
+│   ├── styles.css           # styles de la mini app (thème clair + sombre)
+│   └── auth.js              # helpers de session côté client (jeton, logout)
 ├── api/
-│   ├── generate.js          # endpoint POST (auth + orchestration Claude)
-│   └── spaces.js            # endpoint GET (liste des espaces)
+│   ├── login.js             # endpoint POST (connexion → jeton de session)
+│   ├── generate.js          # endpoint POST (auth session + orchestration LLM)
+│   └── spaces.js            # endpoint GET (liste des espaces, protégé)
 ├── lib/
+│   ├── auth.js              # login compte unique + jetons signés (HMAC)
 │   ├── llm.js               # sélecteur de fournisseur (Gemini par défaut / Claude)
 │   ├── gemini.js            # appel API Google Gemini (fetch natif + retry)
 │   ├── anthropic.js         # appel API Anthropic Claude (fallback via LLM_PROVIDER)
