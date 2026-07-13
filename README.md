@@ -83,8 +83,25 @@ Publier sur le web* → choisis l'onglet des espaces + format **CSV** → copie 
 obtenue et mets-la dans `SHEET_CSV_URL` sur Vercel.
 
 Colonnes reconnues (insensible aux accents/casse) : `espace` (ou `nom`),
-`localisation`, `prix`, `postes`, `superficie`, `disponibilite`, `url`
-(lien Hubspot), `description`. Toute ligne sans nom d'espace est ignorée.
+`localisation`, `prix`, `postes`, `superficie(s)`, `disponibilite`, `url` /
+`URL Hubspot`, `description`. L'ordre des colonnes n'importe pas ; toute ligne
+sans nom d'espace est ignorée.
+
+> ℹ️ Sans `SHEET_CSV_URL`, l'app affiche le catalogue réel figé dans
+> `lib/spacesSample.js` (mis à jour depuis le Sheet). Publie le CSV pour un
+> affichage **toujours à jour**.
+
+### Le générateur lit aussi la fiche Hubspot 🔗
+
+Au moment de générer, le backend **suit le lien Hubspot de l'espace** (colonne
+`URL Hubspot`, souvent un raccourci `hubs.ly`), récupère la page et en extrait le
+texte. Ces informations sont ensuite **la source à privilégier** dans le prompt
+(équipements, services, ambiance, quartier…), en plus des champs du Sheet.
+
+- La fiche est lue **une seule fois par espace** et réutilisée pour les 4 commerciaux.
+- Robuste : si le lien est privé, en PDF, ou injoignable, la génération continue
+  simplement avec les infos du Sheet (`hubspotUsed:false` dans la réponse).
+- La réponse `/api/generate` indique `hubspotUsed: true/false`.
 
 ---
 
@@ -196,7 +213,8 @@ snapdesk-linkedin/
 │   ├── anthropic.js         # appel API Anthropic Claude (fallback via LLM_PROVIDER)
 │   ├── prompt.js            # construction du prompt (système + user)
 │   ├── spaces.js            # lecture de la base (Google Sheet CSV ou exemple)
-│   ├── spacesSample.js      # jeu de données d'exemple (fallback)
+│   ├── spacesSample.js      # catalogue réel figé (fallback si pas de CSV)
+│   ├── hubspot.js           # lecture du contenu de la fiche Hubspot d'un espace
 │   └── commercials/
 │       ├── index.js         # registre des commerciaux
 │       ├── ronan.js         # CEO — configuré

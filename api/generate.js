@@ -11,12 +11,16 @@
 //   "commercials": ["ronan", "melanie", "florian", "thomas"]   // optionnel
 // }
 //
-// Réponse : { ok, space, model, posts: { ronan: { post } | { error } | { skipped }, ... } }
+// Le générateur enrichit l'espace avec le contenu de la fiche Hubspot (space.url)
+// avant de rédiger : cette source est privilégiée dans le prompt.
+//
+// Réponse : { ok, space, model, hubspotUsed, posts: { ronan: { post } | { error } | { skipped }, ... } }
 // ---------------------------------------------------------------------------
 
 import { COMMERCIALS, COMMERCIAL_KEYS, getCommercial } from '../lib/commercials/index.js';
 import { generatePost, MODEL } from '../lib/llm.js';
 import { requireAuth } from '../lib/auth.js';
+import { fetchHubspotContext } from '../lib/hubspot.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -42,6 +46,21 @@ export default async function handler(req, res) {
       ? payload.commercials.map((k) => String(k).toLowerCase())
       : COMMERCIAL_KEYS;
 
+  // --- Lecture de la fiche Hubspot (une seule fois, réutilisée pour tous les commerciaux) ---
+  // On enrichit l'espace avec le contenu du lien Hubspot : c'est la source à privilégier
+  // pour rédiger. En cas d'échec (lien privé, PDF, timeout…), on continue avec le Sheet.
+  let enrichedSpace = space;
+  let hubspotUsed = false;
+  try {
+    const hubspotContext = await fetchHubspotContext(space.url);
+    if (hubspotContext) {
+      enrichedSpace = { ...space, hubspotContext };
+      hubspotUsed = true;
+    }
+  } catch {
+    /* on continue avec les seules infos du Sheet */
+  }
+
   // --- Génération en parallèle (une erreur sur un commercial n'impacte pas les autres) ---
   const entries = await Promise.all(
     requested.map(async (key) => {
@@ -54,7 +73,7 @@ export default async function handler(req, res) {
         }];
       }
       try {
-        const post = await generatePost(commercial, space);
+        const post = await generatePost(commercial, enrichedSpace);
         return [key, { post }];
       } catch (err) {
         return [key, { error: err.message || String(err) }];
@@ -63,5 +82,5 @@ export default async function handler(req, res) {
   );
 
   const posts = Object.fromEntries(entries);
-  return res.status(200).json({ ok: true, space: space.espace, model: MODEL, posts });
+  return res.status(200).json({ ok: true, space: space.espace, model: MODEL, hubspotUsed, posts });
 }
