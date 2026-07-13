@@ -34,11 +34,45 @@ un Google Sheet.
    | `ANTHROPIC_API_KEY` | ta clé `sk-ant-...` (console.anthropic.com) |
    | `API_SECRET` | une longue chaîne aléatoire que tu inventes |
    | `MODEL` *(optionnel)* | `claude-sonnet-5` par défaut |
+   | `SHEET_CSV_URL` *(optionnel)* | URL CSV publiée de ton Google Sheet, pour la mini app web (voir §1bis). Sans elle, la mini app affiche un jeu de données d'exemple. |
 
 5. Déploie. Note l'URL du projet, ex. `https://snapdesk-linkedin.vercel.app`.
    → Ton endpoint est donc `https://snapdesk-linkedin.vercel.app/api/generate`.
 
 > 💡 Génère un `API_SECRET` costaud, par ex. via `openssl rand -hex 32`.
+
+---
+
+## 1bis. La mini app web (interface de génération)
+
+En plus du flux Google Sheet → Apps Script, le projet embarque une **petite
+interface web** servie par le même déploiement Vercel :
+
+- **`/`** — la liste de tous les espaces (lus depuis ta base). Recherche + bouton
+  *Recharger la liste*.
+- **`/space.html?id=…`** — la page d'un espace : **un post LinkedIn par commercial**,
+  avec un bouton **Copier** et un bouton **🔄 Régénérer** (change le post si le
+  format ne te plaît pas). Le bouton **↻ Recharger l'espace** relit les infos de
+  la base pour cet espace **et** régénère les posts.
+
+À la première génération, l'interface te demande le **secret** (`API_SECRET`),
+stocké uniquement dans l'onglet courant, puis envoyé au backend (`x-api-secret`).
+
+### D'où viennent les espaces ? (la « BDD Excel »)
+
+L'endpoint `GET /api/spaces` lit les espaces depuis :
+
+1. **ton Google Sheet publié en CSV** si la variable `SHEET_CSV_URL` est définie ;
+2. sinon, un **jeu de données d'exemple** (`lib/spacesSample.js`) — pratique pour
+   tester l'interface immédiatement.
+
+**Publier ton Sheet en CSV :** dans le Google Sheet → *Fichier → Partager →
+Publier sur le web* → choisis l'onglet des espaces + format **CSV** → copie l'URL
+obtenue et mets-la dans `SHEET_CSV_URL` sur Vercel.
+
+Colonnes reconnues (insensible aux accents/casse) : `espace` (ou `nom`),
+`localisation`, `prix`, `postes`, `superficie`, `disponibilite`, `url`
+(lien Hubspot), `description`. Toute ligne sans nom d'espace est ignorée.
 
 ---
 
@@ -129,17 +163,24 @@ Puis **redéploie sur Vercel** (un `git push` suffit si le projet est lié à Gi
 
 ```
 snapdesk-linkedin/
+├── index.html               # mini app : liste des espaces
+├── space.html               # mini app : posts d'un espace (copier / régénérer)
+├── assets/
+│   └── styles.css           # styles de la mini app (thème clair + sombre)
 ├── api/
-│   └── generate.js          # endpoint POST (auth + orchestration)
+│   ├── generate.js          # endpoint POST (auth + orchestration Claude)
+│   └── spaces.js            # endpoint GET (liste des espaces)
 ├── lib/
 │   ├── anthropic.js         # appel API Anthropic (fetch natif + retry)
 │   ├── prompt.js            # construction du prompt (système + user)
+│   ├── spaces.js            # lecture de la base (Google Sheet CSV ou exemple)
+│   ├── spacesSample.js      # jeu de données d'exemple (fallback)
 │   └── commercials/
 │       ├── index.js         # registre des commerciaux
-│       ├── ronan.js         # ← à remplir
-│       ├── melanie.js       # ← à remplir
-│       ├── florian.js       # ← à remplir
-│       └── thomas.js        # ← à remplir
+│       ├── ronan.js         # CEO — configuré
+│       ├── melanie.js       # Business Developer — configuré
+│       ├── florian.js       # Business Developer — configuré
+│       └── thomas.js        # Head of Marketing — configuré (sans exemples)
 ├── apps-script/
 │   ├── Code.gs              # à coller dans Extensions → Apps Script
 │   └── appsscript.json      # (optionnel) autorisations explicites

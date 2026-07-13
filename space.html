@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snapdesk LinkedIn — Espace</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏢%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="crumb"><a href="/">← Tous les espaces</a></div>
+    <div id="head"></div>
+    <div id="posts-zone"></div>
+  </div>
+
+  <!-- Modal secret -->
+  <div id="modal-bg" class="modal-bg">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h3 id="modal-title">Secret API</h3>
+      <p>Entre le secret partagé (<code style="font-family:var(--mono)">API_SECRET</code>) pour autoriser la génération des posts. Il reste stocké dans cet onglet uniquement.</p>
+      <input id="secret-input" type="password" placeholder="API_SECRET…" autocomplete="off">
+      <div class="modal-actions">
+        <button id="secret-cancel" class="btn">Annuler</button>
+        <button id="secret-ok" class="btn brass">Valider</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // --- Config commerciaux (ordre = affichage) ---
+    const COMS = [
+      { key: 'ronan',   name: 'Ronan',   role: 'CEO · Snapdesk',                    color: '#B67A2E' },
+      { key: 'melanie', name: 'Mélanie', role: 'Business Developer · Snapdesk',     color: '#2E7D57' },
+      { key: 'florian', name: 'Florian', role: 'Business Developer · Snapdesk',     color: '#3A6EA5' },
+      { key: 'thomas',  name: 'Thomas',  role: 'Head of Marketing & Growth · Snapdesk', color: '#9B4D6E' },
+    ];
+    const SECRET_KEY = 'snapdesk_api_secret';
+
+    const fmt = (s) => (s == null ? '' : String(s)).trim();
+    const esc = (t) => fmt(t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+    const params = new URLSearchParams(location.search);
+    const SPACE_ID = params.get('id');
+
+    let SPACE = null;
+
+    // ---------- Toast ----------
+    let toastT;
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.classList.add('show');
+      clearTimeout(toastT);
+      toastT = setTimeout(() => el.classList.remove('show'), 1800);
+    }
+
+    // ---------- Secret (modal) ----------
+    function getSecret() { return sessionStorage.getItem(SECRET_KEY); }
+    function askSecret() {
+      return new Promise((resolve) => {
+        const bg = document.getElementById('modal-bg');
+        const input = document.getElementById('secret-input');
+        input.value = getSecret() || '';
+        bg.classList.add('show');
+        input.focus();
+        const done = (val) => {
+          bg.classList.remove('show');
+          okBtn.removeEventListener('click', onOk);
+          cancelBtn.removeEventListener('click', onCancel);
+          input.removeEventListener('keydown', onKey);
+          resolve(val);
+        };
+        const onOk = () => {
+          const v = fmt(input.value);
+          if (v) sessionStorage.setItem(SECRET_KEY, v);
+          done(v || null);
+        };
+        const onCancel = () => done(null);
+        const onKey = (e) => { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); };
+        const okBtn = document.getElementById('secret-ok');
+        const cancelBtn = document.getElementById('secret-cancel');
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        input.addEventListener('keydown', onKey);
+      });
+    }
+    async function ensureSecret() {
+      let s = getSecret();
+      if (!s) s = await askSecret();
+      return s;
+    }
+
+    // ---------- Chargement de l'espace ----------
+    function dispoClass(d) {
+      const v = fmt(d).toLowerCase();
+      if (!v) return '';
+      return v.includes('dispo') ? 'ok' : 'soon';
+    }
+
+    function renderHead() {
+      const s = SPACE;
+      const facts = [];
+      if (fmt(s.postes)) facts.push(`<span class="pill">${esc(s.postes)} postes</span>`);
+      if (fmt(s.superficie)) facts.push(`<span class="pill">${esc(s.superficie)}</span>`);
+      if (fmt(s.prix)) facts.push(`<span class="pill">${esc(s.prix)}</span>`);
+      if (fmt(s.localisation)) facts.push(`<span class="pill">${esc(s.localisation)}</span>`);
+      const dispo = fmt(s.disponibilite) ? `<span class="dispo ${dispoClass(s.disponibilite)}">${esc(s.disponibilite)}</span>` : '';
+      document.getElementById('head').innerHTML = `
+        <div class="space-head">
+          <div class="row">
+            <div>
+              <p class="eyebrow">Espace</p>
+              <h1>${esc(s.espace)}</h1>
+            </div>
+            <button id="reload-space" class="btn primary" title="Relit les infos Excel de cet espace et régénère les posts">↻ Recharger l'espace</button>
+          </div>
+          <div class="facts">${facts.join('')}${dispo}</div>
+          ${fmt(s.description) ? `<p class="desc">${esc(s.description)}</p>` : ''}
+        </div>`;
+      document.getElementById('reload-space').addEventListener('click', reloadSpace);
+    }
+
+    async function fetchSpace() {
+      const res = await fetch('/api/spaces', { cache: 'no-store' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Erreur /api/spaces');
+      const found = (data.spaces || []).find(x => x.id === SPACE_ID);
+      if (!found) throw new Error("Espace introuvable (a-t-il été supprimé de la base ?)");
+      return found;
+    }
+
+    // ---------- Rendu des cartes ----------
+    function cardShell(com, inner, statusHtml, actionsHtml) {
+      return `
+        <article class="post" id="post-${com.key}">
+          <div class="post-top">
+            <div class="avatar" style="background:${com.color}">${esc(com.name[0])}</div>
+            <div class="who"><span class="n">${esc(com.name)}</span><span class="r">${esc(com.role)}</span></div>
+          </div>
+          <div class="post-body" id="body-${com.key}">${inner}</div>
+          ${statusHtml || ''}
+          <div class="post-actions">${actionsHtml}</div>
+        </article>`;
+    }
+
+    function skeletonBody() {
+      return `<div class="skeleton" style="width:90%"></div><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:95%"></div><div class="skeleton" style="width:60%"></div>`;
+    }
+
+    function renderPostsShell() {
+      const zone = document.getElementById('posts-zone');
+      zone.innerHTML = `<div class="posts">${
+        COMS.map(c => cardShell(
+          c, skeletonBody(), '',
+          `<button class="btn small" disabled>Copier</button><button class="btn small" disabled>🔄 Régénérer</button>`
+        )).join('')
+      }</div>`;
+    }
+
+    function fillCard(com, entry) {
+      const card = document.getElementById(`post-${com.key}`);
+      if (!card) return;
+      const body = card.querySelector('.post-body');
+      const actions = card.querySelector('.post-actions');
+      // Nettoie l'ancien statut
+      const old = card.querySelector('.post-status');
+      if (old) old.remove();
+
+      let statusHtml = '', bodyHtml = '', canCopy = false;
+      if (entry && entry.error) {
+        body.classList.add('muted');
+        bodyHtml = `⚠️ ${esc(entry.error)}`;
+        statusHtml = `<div class="post-status err">erreur</div>`;
+      } else if (entry && entry.skipped) {
+        body.classList.add('muted');
+        bodyHtml = esc(entry.post || 'Config à compléter.');
+        statusHtml = `<div class="post-status skip">à configurer</div>`;
+      } else if (entry && entry.post) {
+        body.classList.remove('muted');
+        bodyHtml = esc(entry.post);
+        statusHtml = `<div class="post-status ok">prêt</div>`;
+        canCopy = true;
+      } else {
+        body.classList.add('muted');
+        bodyHtml = 'Aucun contenu.';
+      }
+      body.innerHTML = bodyHtml;
+      // Réinsère le statut avant les actions
+      actions.insertAdjacentHTML('beforebegin', statusHtml);
+
+      actions.innerHTML =
+        `<button class="btn small copy" ${canCopy ? '' : 'disabled'}>Copier</button>` +
+        `<button class="btn small regen">🔄 Régénérer</button>`;
+      if (canCopy) {
+        actions.querySelector('.copy').addEventListener('click', () => copyText(entry.post));
+      }
+      actions.querySelector('.regen').addEventListener('click', () => regenerate(com.key));
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('✓ Post copié');
+      } catch {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); toast('✓ Post copié'); } catch { toast('Copie impossible'); }
+        ta.remove();
+      }
+    }
+
+    // ---------- Génération ----------
+    function spacePayload() {
+      const s = SPACE;
+      return {
+        url: s.url, localisation: s.localisation, espace: s.espace, prix: s.prix,
+        postes: s.postes, superficie: s.superficie, disponibilite: s.disponibilite,
+        description: s.description,
+      };
+    }
+
+    async function callGenerate(commercials) {
+      const secret = await ensureSecret();
+      if (!secret) { toast('Secret requis pour générer'); return null; }
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-secret': secret },
+        body: JSON.stringify({ space: spacePayload(), commercials }),
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem(SECRET_KEY);
+        toast('Secret invalide — réessaie');
+        return null;
+      }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data.posts || {};
+    }
+
+    async function generateAll() {
+      renderPostsShell();
+      let posts;
+      try {
+        posts = await callGenerate(COMS.map(c => c.key));
+      } catch (err) {
+        document.getElementById('posts-zone').innerHTML = `<div class="error-box">Génération impossible : ${esc(err.message)}</div>`;
+        return;
+      }
+      if (!posts) { // secret manquant/invalide
+        COMS.forEach(c => fillCard(c, { error: 'Génération annulée (secret manquant). Clique “Régénérer”.' }));
+        return;
+      }
+      COMS.forEach(c => fillCard(c, posts[c.key]));
+    }
+
+    async function regenerate(key) {
+      const com = COMS.find(c => c.key === key);
+      const card = document.getElementById(`post-${key}`);
+      if (card) card.querySelector('.post-body').innerHTML = skeletonBody();
+      const old = card && card.querySelector('.post-status');
+      if (old) old.remove();
+      try {
+        const posts = await callGenerate([key]);
+        if (!posts) { fillCard(com, { error: 'Secret manquant/invalide.' }); return; }
+        fillCard(com, posts[key]);
+        if (posts[key] && posts[key].post && !posts[key].skipped && !posts[key].error) toast('Nouveau post généré');
+      } catch (err) {
+        fillCard(com, { error: err.message });
+      }
+    }
+
+    // ---------- Recharger l'espace (relit l'Excel + régénère) ----------
+    async function reloadSpace() {
+      const btn = document.getElementById('reload-space');
+      if (btn) { btn.disabled = true; btn.textContent = '↻ Rechargement…'; }
+      try {
+        SPACE = await fetchSpace();     // relit les infos de l'Excel
+        renderHead();
+        toast('Infos espace relues');
+        await generateAll();            // régénère les posts
+      } catch (err) {
+        document.getElementById('posts-zone').innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      }
+    }
+
+    // ---------- Init ----------
+    async function init() {
+      if (!SPACE_ID) {
+        document.getElementById('head').innerHTML = `<div class="error-box">Aucun espace indiqué. <a href="/">Retour à la liste</a></div>`;
+        return;
+      }
+      try {
+        SPACE = await fetchSpace();
+        renderHead();
+        await generateAll();
+      } catch (err) {
+        document.getElementById('head').innerHTML = `<div class="error-box">${esc(err.message)} — <a href="/">retour</a></div>`;
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

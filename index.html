@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snapdesk LinkedIn — Espaces</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏢%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <p class="eyebrow">Snapdesk · Générateur de posts LinkedIn</p>
+        <h1>Espaces à promouvoir</h1>
+        <p class="lede">Chaque espace de ta base est listé ici. Ouvre-en un pour récupérer le post LinkedIn de chaque commercial, prêt à copier-coller.</p>
+      </div>
+      <span id="source-badge" class="badge sample" title="Source des données">…</span>
+    </div>
+
+    <div class="toolbar">
+      <div class="search">
+        <input id="search" type="search" placeholder="Rechercher un espace, un quartier…" autocomplete="off">
+      </div>
+      <button id="reload" class="btn" title="Relire la base de données">↻ Recharger la liste</button>
+    </div>
+
+    <div id="content" class="loading">Chargement des espaces…</div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const fmt = (s) => (s == null ? '' : String(s)).trim();
+    const esc = (t) => fmt(t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+    function dispoClass(d) {
+      const v = fmt(d).toLowerCase();
+      if (!v) return '';
+      if (v.includes('dispo')) return 'ok';
+      return 'soon';
+    }
+
+    function card(space) {
+      const facts = [];
+      if (fmt(space.postes)) facts.push(`<span class="pill">${esc(space.postes)} postes</span>`);
+      if (fmt(space.superficie)) facts.push(`<span class="pill">${esc(space.superficie)}</span>`);
+      if (fmt(space.prix)) facts.push(`<span class="pill">${esc(space.prix)}</span>`);
+      const dispo = fmt(space.disponibilite)
+        ? `<span class="dispo ${dispoClass(space.disponibilite)}">${esc(space.disponibilite)}</span>` : '';
+      return `
+        <a class="space-card" href="/space.html?id=${encodeURIComponent(space.id)}">
+          <div class="name">${esc(space.espace)}</div>
+          <div class="loc">${esc(space.localisation) || '—'}</div>
+          <div class="facts">${facts.join('')}${dispo}</div>
+          <div class="go">Voir les posts →</div>
+        </a>`;
+    }
+
+    let ALL = [];
+
+    function render(list) {
+      const content = document.getElementById('content');
+      if (!list.length) {
+        content.className = '';
+        content.innerHTML = `<div class="notice">Aucun espace trouvé.</div>`;
+        return;
+      }
+      content.className = 'spaces';
+      content.innerHTML = list.map(card).join('');
+    }
+
+    async function load() {
+      const content = document.getElementById('content');
+      content.className = 'loading';
+      content.textContent = 'Chargement des espaces…';
+      try {
+        const res = await fetch('/api/spaces', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Erreur inconnue');
+        ALL = data.spaces || [];
+        const badge = document.getElementById('source-badge');
+        if (data.source === 'sheet') {
+          badge.className = 'badge sheet';
+          badge.textContent = `● Google Sheet · ${data.count}`;
+        } else {
+          badge.className = 'badge sample';
+          badge.textContent = `● Données d'exemple · ${data.count}`;
+          badge.title = "SHEET_CSV_URL non défini — on affiche le jeu d'exemple.";
+        }
+        applyFilter();
+      } catch (err) {
+        content.className = '';
+        content.innerHTML = `<div class="error-box">Impossible de charger les espaces : ${esc(err.message)}</div>`;
+      }
+    }
+
+    function applyFilter() {
+      const q = fmt(document.getElementById('search').value).toLowerCase();
+      if (!q) return render(ALL);
+      render(ALL.filter(s =>
+        [s.espace, s.localisation, s.description].some(v => fmt(v).toLowerCase().includes(q))
+      ));
+    }
+
+    document.getElementById('search').addEventListener('input', applyFilter);
+    document.getElementById('reload').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
