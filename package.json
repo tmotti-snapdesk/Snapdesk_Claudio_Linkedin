@@ -1,0 +1,14 @@
+{
+  "name": "snapdesk-linkedin-generator",
+  "version": "1.0.0",
+  "description": "Génère des posts LinkedIn personnalisés par commercial à partir des espaces de bureaux Snapdesk (Google Sheet → Vercel → Claude).",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  }
+}
