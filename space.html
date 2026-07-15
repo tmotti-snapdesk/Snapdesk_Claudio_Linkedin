@@ -57,39 +57,71 @@
 
     let SPACE = null;
 
-    // ---------- Persistance locale (par espace) ----------
-    // Les posts générés et la note du jour survivent au changement de page.
-    const POSTS_KEY = `snapdesk_posts_${SPACE_ID}`;
-    const DAILY_KEY = `snapdesk_daily_${SPACE_ID}`;
-    function loadSavedPosts() { try { return JSON.parse(localStorage.getItem(POSTS_KEY) || '{}'); } catch { return {}; } }
-    function savePostText(key, text) { const m = loadSavedPosts(); m[key] = text; localStorage.setItem(POSTS_KEY, JSON.stringify(m)); }
-    function removeSavedPost(key) { const m = loadSavedPosts(); delete m[key]; localStorage.setItem(POSTS_KEY, JSON.stringify(m)); }
+    // ---------- Mémoire PARTAGÉE (Supabase via /api/state) + repli localStorage ----------
+    // STATE est chargé au démarrage depuis le serveur (partagé entre tous les PC).
+    // Si le stockage partagé n'est pas configuré/joignable, on retombe sur localStorage
+    // (mémoire par navigateur, comme avant) pour ne rien casser.
+    let STATE = { posts: {}, dailyNote: '', history: [] };
+    let SERVER_OK = false;
 
-    // ---------- Historique GLOBAL des accroches (anti-répétition, tous espaces / tous commerciaux) ----------
-    const HISTORY_KEY = 'snapdesk_hook_history';
+    const LS_POSTS = `snapdesk_posts_${SPACE_ID}`;
+    const LS_DAILY = `snapdesk_daily_${SPACE_ID}`;
+    const LS_HIST = 'snapdesk_hook_history';
     const HISTORY_MAX = 60;
-    function loadHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
+    const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
+
     function firstLine(text) {
       const line = String(text || '').split('\n').map(s => s.trim()).find(s => s.length > 0) || '';
       return line.slice(0, 160);
     }
+    function apiState(body) {
+      return Auth.fetch('/api/state', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      }).catch(() => {});
+    }
+
+    // Charge l'état (posts + note du jour + historique) pour l'espace courant.
+    async function loadState() {
+      try {
+        const res = await Auth.fetch('/api/state?space=' + encodeURIComponent(SPACE_ID || ''), { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'state');
+        STATE = { posts: data.posts || {}, dailyNote: data.dailyNote || '', history: data.history || [] };
+        SERVER_OK = true;
+      } catch {
+        // Repli localStorage (par navigateur)
+        SERVER_OK = false;
+        STATE = { posts: lsGet(LS_POSTS, {}), dailyNote: localStorage.getItem(LS_DAILY) || '', history: lsGet(LS_HIST, []) };
+      }
+    }
+
+    function loadSavedPosts() { return STATE.posts; }
+    function savePostText(key, text) {
+      STATE.posts[key] = text;
+      if (SERVER_OK) apiState({ op: 'savePost', space: SPACE_ID, commercial: key, content: text });
+      else localStorage.setItem(LS_POSTS, JSON.stringify(STATE.posts));
+    }
+    function removeSavedPost(key) {
+      delete STATE.posts[key];
+      if (SERVER_OK) apiState({ op: 'deletePost', space: SPACE_ID, commercial: key });
+      else localStorage.setItem(LS_POSTS, JSON.stringify(STATE.posts));
+    }
+    function getDailyNote() { return STATE.dailyNote || ''; }
+    let dailyT;
+    function setDailyNote(v) {
+      STATE.dailyNote = v;
+      if (SERVER_OK) { clearTimeout(dailyT); dailyT = setTimeout(() => apiState({ op: 'saveDaily', space: SPACE_ID, content: v }), 500); }
+      else localStorage.setItem(LS_DAILY, v);
+    }
     function recordHook(author, postText) {
       const hook = firstLine(postText);
       if (!hook) return;
-      const hist = loadHistory();
-      hist.push({ author, hook });
-      // dédoublonne (author|hook) en gardant les plus récents, puis plafonne.
-      const seen = new Set(); const out = [];
-      for (let i = hist.length - 1; i >= 0; i--) {
-        const k = hist[i].author + '|' + hist[i].hook;
-        if (seen.has(k)) continue;
-        seen.add(k); out.unshift(hist[i]);
-      }
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(out.slice(-HISTORY_MAX)));
+      STATE.history.push({ author, hook });
+      STATE.history = STATE.history.slice(-HISTORY_MAX);
+      if (SERVER_OK) apiState({ op: 'appendHook', author, hook });
+      else localStorage.setItem(LS_HIST, JSON.stringify(STATE.history));
     }
-    function recentHooksForPrompt() { return loadHistory().slice(-30); }
-    function getDailyNote() { return localStorage.getItem(DAILY_KEY) || ''; }
-    function setDailyNote(v) { localStorage.setItem(DAILY_KEY, v); }
+    function recentHooksForPrompt() { return (STATE.history || []).slice(-30); }
 
     // ---------- Toast ----------
     let toastT;
@@ -417,6 +449,7 @@
       if (btn) { btn.disabled = true; btn.textContent = '↻ Rechargement…'; }
       try {
         SPACE = await fetchSpace();
+        await loadState();
         renderHead();
         renderPostsIdle();
         toast('Infos espace relues');
@@ -431,15 +464,17 @@
         document.getElementById('head').innerHTML = `<div class="error-box">Aucun espace indiqué. <a href="/">Retour à la liste</a></div>`;
         return;
       }
-      // Mode "post général" (hors espace) : rien à charger.
+      // Mode "post général" (hors espace) : rien à charger côté Sheet.
       if (SPACE_ID === '__general__') {
         SPACE = { general: true };
+        await loadState();
         renderHead();
         renderPostsIdle();
         return;
       }
       try {
         SPACE = await fetchSpace();
+        await loadState();
         renderHead();
         renderPostsIdle();
       } catch (err) {

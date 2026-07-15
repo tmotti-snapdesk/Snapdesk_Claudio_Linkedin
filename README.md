@@ -46,6 +46,16 @@ un Google Sheet.
    > personne ne peut se connecter avec d'autres identifiants. Ces valeurs restent
    > **uniquement** dans Vercel, jamais dans le code.
 
+   | Nom (mémoire partagée) | Valeur |
+   |---|---|
+   | `SUPABASE_URL` *(optionnel)* | URL du projet Supabase (Settings → API → Project URL) |
+   | `SUPABASE_SERVICE_ROLE_KEY` *(optionnel)* | clé `service_role` Supabase — **secrète, serveur uniquement** |
+
+   > 🤝 **Mémoire partagée** : avec Supabase configuré, **tous les membres voient et
+   > modifient le même travail** (posts générés, éditions, note du jour, historique
+   > anti-répétition) depuis n'importe quel PC. **Sans** Supabase, l'app fonctionne
+   > quand même mais la mémoire est **par navigateur** (localStorage). Setup en §7.
+
 5. Déploie. Note l'URL du projet, ex. `https://snapdesk-linkedin.vercel.app`.
    → Ton endpoint est donc `https://snapdesk-linkedin.vercel.app/api/generate`.
 
@@ -185,6 +195,32 @@ Puis **redéploie sur Vercel** (un `git push` suffit si le projet est lié à Gi
 
 ---
 
+## 5bis. Mémoire partagée entre tous (Supabase)
+
+Par défaut, la mémoire (posts générés, éditions, note du jour, historique) est
+stockée **dans le navigateur** de chacun → **non partagée** entre PC/personnes.
+Pour que **toute l'équipe voie et modifie le même travail**, branche Supabase :
+
+1. Crée un projet gratuit sur **https://supabase.com**.
+2. Dans **SQL Editor**, exécute :
+   ```sql
+   create table if not exists snapdesk_state (
+     key text primary key,
+     value jsonb not null,
+     updated_at timestamptz not null default now()
+   );
+   ```
+3. Dans **Settings → API**, récupère :
+   - **Project URL** → variable Vercel `SUPABASE_URL`
+   - **service_role** (clé secrète) → variable Vercel `SUPABASE_SERVICE_ROLE_KEY`
+4. Ajoute ces 2 variables dans **Vercel → Settings → Environment Variables**, puis **Redeploy**.
+
+> La clé `service_role` reste **côté serveur uniquement** (endpoint `/api/state`),
+> jamais exposée au navigateur. Les données transitent par le login de l'app.
+> Les changements d'un membre apparaissent chez les autres **au rechargement** de la page.
+
+---
+
 ## 6. Dépannage
 
 | Symptôme | Piste |
@@ -213,9 +249,11 @@ snapdesk-linkedin/
 ├── api/
 │   ├── login.js             # endpoint POST (connexion → jeton de session)
 │   ├── generate.js          # endpoint POST (auth session + orchestration LLM)
-│   └── spaces.js            # endpoint GET (liste des espaces, protégé)
+│   ├── spaces.js            # endpoint GET (liste des espaces, protégé)
+│   └── state.js             # endpoint GET/POST (mémoire partagée Supabase)
 ├── lib/
 │   ├── auth.js              # login compte unique + jetons signés (HMAC)
+│   ├── store.js             # accès Supabase (clé-valeur, mémoire partagée)
 │   ├── llm.js               # sélecteur de fournisseur (Gemini par défaut / Claude)
 │   ├── gemini.js            # appel API Google Gemini (fetch natif + retry)
 │   ├── anthropic.js         # appel API Anthropic Claude (fallback via LLM_PROVIDER)
