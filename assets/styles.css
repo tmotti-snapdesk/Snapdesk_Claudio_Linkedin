@@ -146,8 +146,12 @@ h1 { font-family: var(--serif); font-weight: 600; letter-spacing: -.01em; font-s
 .post-status.skip { background: var(--brass-soft); color: var(--amber); }
 .post-status.err { background: var(--red-soft); color: var(--red); }
 .post-status.ok { background: var(--green-soft); color: var(--green); }
-.post-actions { display: flex; gap: 8px; border-top: 1px solid var(--line); padding: 10px 12px; }
-.post-actions .btn { flex: 1; justify-content: center; }
+.post-actions { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--line); padding: 10px 12px; }
+.post-actions .btn { flex: 1 1 auto; min-width: 88px; justify-content: center; }
+.edit-area { width: 100%; box-sizing: border-box; font-family: var(--sans); font-size: 13.5px; line-height: 1.5; color: var(--ink); background: var(--paper-2); border: 1px solid var(--brass); border-radius: 8px; padding: 10px 12px; resize: vertical; min-height: 140px; }
+.edit-area:focus { outline: 2px solid var(--brass); outline-offset: 1px; }
+.btn.validate { color: #fff; background: var(--green); border-color: var(--green); }
+.btn.validate:hover { opacity: .92; background: var(--green); }
 
 /* --- États / squelette --- */
 .loading { color: var(--taupe); font-size: 14px; }

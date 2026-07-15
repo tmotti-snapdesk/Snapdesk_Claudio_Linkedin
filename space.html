@@ -246,12 +246,55 @@
       actions.innerHTML =
         `<button class="btn small copy" ${canCopy ? '' : 'disabled'}>Copier</button>` +
         `<button class="btn small regen">🔄 Régénérer</button>` +
+        (canCopy ? `<button class="btn small edit">✏️ Modifier</button>` : '') +
         (canCopy ? `<button class="btn small danger del">🗑 Supprimer</button>` : '');
       if (canCopy) {
         actions.querySelector('.copy').addEventListener('click', () => copyText(entry.post));
+        actions.querySelector('.edit').addEventListener('click', () => enterEdit(com.key));
         actions.querySelector('.del').addEventListener('click', () => deleteOne(com.key));
       }
       actions.querySelector('.regen').addEventListener('click', () => generateOne(com.key));
+    }
+
+    function autoResize(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 4, 700) + 'px'; }
+
+    // Passe une carte en édition manuelle : le corps devient éditable, le bouton
+    // "Modifier" laisse place à "Valider" le temps de l'édition.
+    function enterEdit(key) {
+      const card = document.getElementById(`post-${key}`);
+      if (!card) return;
+      const body = card.querySelector('.post-body');
+      const current = (loadSavedPosts()[key] != null) ? loadSavedPosts()[key] : body.textContent;
+      body.classList.remove('muted');
+      body.innerHTML = `<textarea class="edit-area" id="edit-${key}"></textarea>`;
+      const ta = document.getElementById(`edit-${key}`);
+      ta.value = current;
+      autoResize(ta);
+      ta.addEventListener('input', () => autoResize(ta));
+      ta.focus();
+      // Statut "édition" + une seule action : Valider.
+      const old = card.querySelector('.post-status');
+      if (old) old.remove();
+      const actions = card.querySelector('.post-actions');
+      actions.insertAdjacentHTML('beforebegin', `<div class="post-status skip">édition</div>`);
+      actions.innerHTML = `<button class="btn small validate">✓ Valider</button>`;
+      actions.querySelector('.validate').addEventListener('click', () => saveEdit(key));
+    }
+
+    // Valide l'édition : sauvegarde le texte (persisté) et rétablit l'affichage normal.
+    function saveEdit(key) {
+      const com = COMS.find(c => c.key === key);
+      const ta = document.getElementById(`edit-${key}`);
+      const text = ta ? String(ta.value).trim() : '';
+      if (text) {
+        savePostText(key, text);          // persiste la modification
+        fillCard(com, { post: text });    // rétablit le rendu + le bouton "Modifier"
+        toast('Post modifié');
+      } else {
+        // texte vidé : on ne sauvegarde pas du vide, on rétablit l'existant.
+        const prev = loadSavedPosts()[key];
+        fillCard(com, prev ? { post: prev } : { error: 'Post vide' });
+      }
     }
 
     // Remet une carte au repos (bouton "Générer le post").
