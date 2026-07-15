@@ -13,6 +13,7 @@
       <a href="/">← Tous les espaces</a>
       <span class="userbar" id="userbar"></span>
     </div>
+    <div id="store-warn"></div>
     <div id="head"></div>
     <div id="posts-zone"></div>
   </div>
@@ -63,6 +64,7 @@
     // (mémoire par navigateur, comme avant) pour ne rien casser.
     let STATE = { posts: {}, dailyNote: '', history: [] };
     let SERVER_OK = false;
+    let STORE_STATUS = { ok: true, error: '', code: '' };
 
     const LS_POSTS = `snapdesk_posts_${SPACE_ID}`;
     const LS_DAILY = `snapdesk_daily_${SPACE_ID}`;
@@ -74,25 +76,50 @@
       const line = String(text || '').split('\n').map(s => s.trim()).find(s => s.length > 0) || '';
       return line.slice(0, 160);
     }
-    function apiState(body) {
-      return Auth.fetch('/api/state', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-      }).catch(() => {});
+    async function apiState(body) {
+      try {
+        const res = await Auth.fetch('/api/state', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let d = {}; try { d = await res.json(); } catch {}
+          STORE_STATUS = { ok: false, error: (d && d.error) || ('HTTP ' + res.status), code: (d && d.code) || '' };
+          showStoreWarning();
+        }
+        return res;
+      } catch { /* réseau / redirection auth */ }
     }
 
     // Charge l'état (posts + note du jour + historique) pour l'espace courant.
     async function loadState() {
       try {
         const res = await Auth.fetch('/api/state?space=' + encodeURIComponent(SPACE_ID || ''), { cache: 'no-store' });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || 'state');
+        let data = {}; try { data = await res.json(); } catch {}
+        if (!res.ok || !data.ok) {
+          STORE_STATUS = { ok: false, error: (data && data.error) || ('HTTP ' + res.status), code: (data && data.code) || '' };
+          throw new Error(STORE_STATUS.error);
+        }
         STATE = { posts: data.posts || {}, dailyNote: data.dailyNote || '', history: data.history || [] };
         SERVER_OK = true;
-      } catch {
-        // Repli localStorage (par navigateur)
+        STORE_STATUS = { ok: true, error: '', code: '' };
+      } catch (e) {
+        // Repli localStorage (par navigateur) — le partage ne fonctionne pas.
         SERVER_OK = false;
+        if (STORE_STATUS.ok) STORE_STATUS = { ok: false, error: e.message || 'réseau', code: '' };
         STATE = { posts: lsGet(LS_POSTS, {}), dailyNote: localStorage.getItem(LS_DAILY) || '', history: lsGet(LS_HIST, []) };
       }
+      showStoreWarning();
+    }
+
+    // Affiche (ou masque) un bandeau si la mémoire partagée n'est pas disponible.
+    function showStoreWarning() {
+      const el = document.getElementById('store-warn');
+      if (!el) return;
+      if (STORE_STATUS.ok) { el.innerHTML = ''; return; }
+      const detail = STORE_STATUS.code === 'NO_STORE'
+        ? "Supabase n'est pas vu par le serveur : vérifie SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY dans Vercel, puis fais un Redeploy."
+        : `Détail : ${STORE_STATUS.error}`;
+      el.innerHTML = `<div class="store-warn">⚠️ <b>Mémoire partagée indisponible</b> — le travail n'est PAS synchronisé entre les PC (repli mémoire locale du navigateur).<br>${esc(detail)}</div>`;
     }
 
     function loadSavedPosts() { return STATE.posts; }
