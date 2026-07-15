@@ -88,6 +88,15 @@ h1 { font-family: var(--serif); font-weight: 600; letter-spacing: -.01em; font-s
 .search input { width: 100%; font-family: var(--sans); font-size: 15px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; }
 .search input:focus { outline: 2px solid var(--brass); outline-offset: 1px; border-color: transparent; }
 
+/* --- Bouton pleine largeur : post général (hors espace) --- */
+.general-cta { display: flex; align-items: center; gap: 16px; width: 100%; margin-bottom: 20px; padding: 18px 22px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--brass); box-shadow: var(--shadow); color: inherit; text-decoration: none; transition: transform .1s, box-shadow .15s; }
+.general-cta:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 14px 34px rgba(27,30,36,.1); }
+.general-cta .ic { font-size: 24px; flex: none; }
+.general-cta .txt { display: flex; flex-direction: column; gap: 2px; }
+.general-cta .t { font-family: var(--serif); font-size: 18px; font-weight: 600; }
+.general-cta .s { font-size: 13px; color: var(--taupe); }
+.general-cta .go { margin-left: auto; font-weight: 600; color: var(--brass); white-space: nowrap; }
+
 /* --- Grille d'espaces --- */
 .spaces { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .space-card { display: flex; flex-direction: column; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; text-decoration: none; color: inherit; transition: transform .1s, box-shadow .15s; }

@@ -91,8 +91,44 @@
       return v.includes('dispo') ? 'ok' : 'soon';
     }
 
+    // Câble le champ texte (note du jour / brief) : pré-rempli + sauvegardé à la frappe.
+    function wireDailyNote() {
+      const dn = document.getElementById('daily-note');
+      if (!dn) return;
+      dn.value = getDailyNote();
+      let savedT;
+      dn.addEventListener('input', () => {
+        setDailyNote(dn.value);
+        const tag = document.getElementById('daily-saved');
+        if (tag) { tag.textContent = '✓ enregistré'; clearTimeout(savedT); savedT = setTimeout(() => { tag.textContent = ''; }, 1200); }
+      });
+    }
+
     function renderHead() {
       const s = SPACE;
+
+      // --- Mode "post général" (hors espace) ---
+      if (s.general) {
+        document.getElementById('head').innerHTML = `
+          <div class="space-head">
+            <div class="row">
+              <div>
+                <p class="eyebrow">Post général</p>
+                <h1>Posts LinkedIn — hors espace</h1>
+              </div>
+            </div>
+            <p class="desc">Chaque membre génère un post LinkedIn qui n'est lié à aucun espace. Donne un sujet / brief (optionnel), puis clique « Générer le post » du membre voulu.</p>
+            <div class="daily">
+              <label for="daily-note">📝 Sujet / brief du post <span>— de quoi veux-tu parler ? (tendance, actualité, conseil, prise de position…). Laisse vide pour laisser le membre choisir son angle.</span></label>
+              <textarea id="daily-note" placeholder="Ex. : le retour au bureau · l'importance du design des bureaux · un conseil pour bien choisir ses locaux · réagir à une actu du flex office…"></textarea>
+              <div class="saved" id="daily-saved"></div>
+            </div>
+          </div>`;
+        wireDailyNote();
+        return;
+      }
+
+      // --- Mode "espace" ---
       const facts = [];
       if (fmt(s.postes)) facts.push(`<span class="pill">${esc(s.postes)} postes</span>`);
       if (fmt(s.superficie)) facts.push(`<span class="pill">${esc(s.superficie)}</span>`);
@@ -124,17 +160,7 @@
       // Lien de présentation : bouton "copier".
       const cp = document.getElementById('copy-presentation');
       if (cp) cp.addEventListener('click', () => copyText(SPACE.presentation, '✓ Lien de la landing page copié'));
-      // Note du jour : pré-remplie depuis le stockage, sauvegardée à la frappe.
-      const dn = document.getElementById('daily-note');
-      if (dn) {
-        dn.value = getDailyNote();
-        let savedT;
-        dn.addEventListener('input', () => {
-          setDailyNote(dn.value);
-          const tag = document.getElementById('daily-saved');
-          if (tag) { tag.textContent = '✓ enregistré'; clearTimeout(savedT); savedT = setTimeout(() => { tag.textContent = ''; }, 1200); }
-        });
-      }
+      wireDailyNote();
     }
 
     async function fetchSpace() {
@@ -265,6 +291,7 @@
     // ---------- Génération ----------
     function spacePayload() {
       const s = SPACE;
+      if (s.general) return { general: true, dailyNote: getDailyNote() };
       return {
         url: s.url, localisation: s.localisation, espace: s.espace, prix: s.prix,
         postes: s.postes, superficie: s.superficie, disponibilite: s.disponibilite,
@@ -326,6 +353,13 @@
     async function init() {
       if (!SPACE_ID) {
         document.getElementById('head').innerHTML = `<div class="error-box">Aucun espace indiqué. <a href="/">Retour à la liste</a></div>`;
+        return;
+      }
+      // Mode "post général" (hors espace) : rien à charger.
+      if (SPACE_ID === '__general__') {
+        SPACE = { general: true };
+        renderHead();
+        renderPostsIdle();
         return;
       }
       try {

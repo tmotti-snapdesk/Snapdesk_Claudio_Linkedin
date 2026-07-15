@@ -37,7 +37,8 @@ export default async function handler(req, res) {
     try { payload = JSON.parse(payload); } catch { payload = {}; }
   }
   const space = payload && payload.space;
-  if (!space || !space.espace) {
+  const isGeneral = !!(space && space.general);
+  if (!space || (!isGeneral && !space.espace)) {
     return res.status(400).json({ ok: false, error: 'Champ "space.espace" requis' });
   }
 
@@ -51,14 +52,16 @@ export default async function handler(req, res) {
   // pour rédiger. En cas d'échec (lien privé, PDF, timeout…), on continue avec le Sheet.
   let enrichedSpace = space;
   let hubspotUsed = false;
-  try {
-    const hubspotContext = await fetchHubspotContext(space.url);
-    if (hubspotContext) {
-      enrichedSpace = { ...space, hubspotContext };
-      hubspotUsed = true;
+  if (!isGeneral) {
+    try {
+      const hubspotContext = await fetchHubspotContext(space.url);
+      if (hubspotContext) {
+        enrichedSpace = { ...space, hubspotContext };
+        hubspotUsed = true;
+      }
+    } catch {
+      /* on continue avec les seules infos du Sheet */
     }
-  } catch {
-    /* on continue avec les seules infos du Sheet */
   }
 
   // Historique des accroches déjà utilisées (envoyé par le client) → anti-répétition.
