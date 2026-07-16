@@ -1,14 +1,13 @@
 // ---------------------------------------------------------------------------
-// POST /api/login
+// POST /api/login   body { username, password }  → { ok, token, user, admin }
 //
-// Corps (JSON) : { username, password }
-// Réponse OK   : { ok: true, token, user }
-// Réponse KO   : 401 { ok:false, error }  ou 500 si non configuré côté serveur.
-//
-// Un seul compte est accepté (APP_USER / APP_PASSWORD dans les env vars Vercel).
+// Vérifie :
+//   1) un compte utilisateur stocké dans Supabase (user:<pseudo>), OU
+//   2) le compte maître Vercel (APP_USER / APP_PASSWORD) — admin de secours.
 // ---------------------------------------------------------------------------
 
-import { checkCredentials, issueToken, isConfigured } from '../lib/auth.js';
+import { checkCredentials, issueToken, isConfigured, verifyPassword } from '../lib/auth.js';
+import { kvGet, isConfigured as storeConfigured } from '../lib/store.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,24 +15,35 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'Méthode non autorisée' });
   }
 
-  if (!isConfigured()) {
+  if (!isConfigured() && !storeConfigured()) {
     return res.status(500).json({
       ok: false,
-      error: 'Connexion non configurée côté serveur (APP_USER / APP_PASSWORD manquants).',
+      error: 'Connexion non configurée (ni compte maître APP_USER/APP_PASSWORD, ni Supabase).',
     });
   }
 
   let body = req.body;
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch { body = {}; }
-  }
-  const username = (body && body.username) || '';
-  const password = (body && body.password) || '';
+  if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+  const username = String((body && body.username) || '').trim().toLowerCase();
+  const password = String((body && body.password) || '');
 
-  if (!checkCredentials(username, password)) {
-    return res.status(401).json({ ok: false, error: 'Identifiants invalides' });
+  // 1) Compte utilisateur dans Supabase
+  if (username && storeConfigured()) {
+    try {
+      const rec = await kvGet(`user:${username}`);
+      if (rec && rec.hash && verifyPassword(password, rec.hash)) {
+        const admin = !!rec.admin;
+        return res.status(200).json({ ok: true, token: issueToken(username, admin), user: username, admin, name: rec.name || '' });
+      }
+    } catch {
+      /* Supabase indisponible → on tente le compte maître ci-dessous */
+    }
   }
 
-  const token = issueToken(username);
-  return res.status(200).json({ ok: true, token, user: String(username).trim().toLowerCase() });
+  // 2) Compte maître Vercel (toujours admin)
+  if (checkCredentials(username, password)) {
+    return res.status(200).json({ ok: true, token: issueToken(username, true), user: username, admin: true });
+  }
+
+  return res.status(401).json({ ok: false, error: 'Identifiants invalides' });
 }

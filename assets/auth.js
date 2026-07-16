@@ -5,19 +5,23 @@
 (function () {
   const TOKEN_KEY = 'snapdesk_token';
   const USER_KEY = 'snapdesk_user';
+  const ADMIN_KEY = 'snapdesk_admin';
 
   const Auth = {
     token: () => localStorage.getItem(TOKEN_KEY),
     user: () => localStorage.getItem(USER_KEY),
+    isAdmin: () => localStorage.getItem(ADMIN_KEY) === '1',
 
-    setSession(token, user) {
+    setSession(token, user, admin) {
       localStorage.setItem(TOKEN_KEY, token);
       if (user) localStorage.setItem(USER_KEY, user);
+      localStorage.setItem(ADMIN_KEY, admin ? '1' : '0');
     },
 
     clear() {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(ADMIN_KEY);
     },
 
     logout() {
@@ -55,6 +59,7 @@
       const u = Auth.user() || 'connecté';
       el.innerHTML =
         `<span class="userbar-name">${u.replace(/[&<>]/g, '')}</span>` +
+        (Auth.isAdmin() ? `<a class="btn small" href="/users.html">👤 Utilisateurs</a>` : '') +
         `<button class="btn small" id="logout-btn">Déconnexion</button>`;
       const b = el.querySelector('#logout-btn');
       if (b) b.addEventListener('click', () => Auth.logout());

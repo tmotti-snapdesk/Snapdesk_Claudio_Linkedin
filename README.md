@@ -41,10 +41,12 @@ un Google Sheet.
    | `LLM_PROVIDER` *(optionnel)* | `gemini` par défaut. Mets `anthropic` (+ `ANTHROPIC_API_KEY`) pour repasser sur Claude. |
    | `SHEET_CSV_URL` *(optionnel)* | URL CSV publiée de ton Google Sheet, pour la mini app web (voir §1bis). Sans elle, la mini app affiche un jeu de données d'exemple. |
 
-   > 🔐 **Connexion** : l'app est protégée par un **login pseudo + mot de passe** (un
-   > seul compte, défini par `APP_USER` / `APP_PASSWORD`). Aucune inscription libre —
-   > personne ne peut se connecter avec d'autres identifiants. Ces valeurs restent
-   > **uniquement** dans Vercel, jamais dans le code.
+   > 🔐 **Connexion (multi-utilisateurs)** : `APP_USER` / `APP_PASSWORD` définissent le
+   > **compte maître (admin)** — il permet d'entrer même si la base est vide et de
+   > **créer/gérer les autres comptes depuis l'app** (page **Utilisateurs**, réservée
+   > aux admins). Les autres utilisateurs sont stockés (mot de passe **haché**) dans
+   > **Supabase**. Le login vérifie d'abord Supabase, puis le compte maître. Nécessite
+   > donc Supabase configuré (voir §5bis) pour les comptes additionnels.
 
    | Nom (mémoire partagée) | Valeur |
    |---|---|
@@ -241,13 +243,15 @@ Pour que **toute l'équipe voie et modifie le même travail**, branche Supabase 
 ```
 snapdesk-linkedin/
 ├── login.html               # mini app : page de connexion (pseudo + mdp)
+├── users.html               # admin : gestion des comptes (créer / supprimer)
 ├── index.html               # mini app : liste des espaces
 ├── space.html               # mini app : posts d'un espace (copier / régénérer)
 ├── assets/
 │   ├── styles.css           # styles de la mini app (thème clair + sombre)
 │   └── auth.js              # helpers de session côté client (jeton, logout)
 ├── api/
-│   ├── login.js             # endpoint POST (connexion → jeton de session)
+│   ├── login.js             # endpoint POST (connexion multi-user → jeton de session)
+│   ├── users.js             # endpoint GET/POST/DELETE (gestion comptes, admin)
 │   ├── generate.js          # endpoint POST (auth session + orchestration LLM)
 │   ├── spaces.js            # endpoint GET (liste des espaces, protégé)
 │   └── state.js             # endpoint GET/POST (mémoire partagée Supabase)

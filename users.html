@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snapdesk LinkedIn — Utilisateurs</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏢%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="crumb" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+      <a href="/">← Retour à l'app</a>
+      <span class="userbar" id="userbar"></span>
+    </div>
+
+    <p class="eyebrow">Administration</p>
+    <h1 style="font-family:var(--serif); font-size:clamp(26px,4vw,36px); margin:0 0 8px;">Utilisateurs</h1>
+    <p class="lede" style="color:var(--ink-soft); max-width:60ch;">Crée et gère les comptes qui peuvent se connecter à l'app. Les mots de passe sont stockés hachés dans Supabase.</p>
+
+    <div id="msg"></div>
+
+    <div class="grid" style="display:grid; grid-template-columns:1.1fr 1fr; gap:20px; align-items:start; margin-top:24px;">
+      <!-- Liste -->
+      <section class="panel" style="background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px;">
+        <h2 style="font-family:var(--serif); font-size:18px; margin:0 0 12px;">Comptes existants</h2>
+        <div id="list" class="loading">Chargement…</div>
+      </section>
+
+      <!-- Formulaire -->
+      <section class="panel" style="background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px;">
+        <h2 style="font-family:var(--serif); font-size:18px; margin:0 0 4px;">Ajouter / modifier un compte</h2>
+        <p class="hint" style="color:var(--taupe); font-size:12.5px; margin:0 0 16px;">Un pseudo existant met à jour le compte (laisse le mot de passe vide pour le garder).</p>
+        <form id="form">
+          <div class="field" style="display:flex; flex-direction:column; gap:5px; margin-bottom:12px;">
+            <label style="font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--taupe); font-weight:600;">Pseudo</label>
+            <input id="f-username" type="text" autocomplete="off" placeholder="prenom@snapdesk.co" required
+              style="font-size:14px; padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:var(--paper-2); color:var(--ink);">
+          </div>
+          <div class="field" style="display:flex; flex-direction:column; gap:5px; margin-bottom:12px;">
+            <label style="font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--taupe); font-weight:600;">Nom (optionnel)</label>
+            <input id="f-name" type="text" autocomplete="off" placeholder="Prénom Nom"
+              style="font-size:14px; padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:var(--paper-2); color:var(--ink);">
+          </div>
+          <div class="field" style="display:flex; flex-direction:column; gap:5px; margin-bottom:12px;">
+            <label style="font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--taupe); font-weight:600;">Mot de passe</label>
+            <input id="f-password" type="text" autocomplete="off" placeholder="mot de passe"
+              style="font-size:14px; padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:var(--paper-2); color:var(--ink);">
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; margin-bottom:16px; cursor:pointer;">
+            <input id="f-admin" type="checkbox" style="width:15px; height:15px; accent-color:var(--brass);">
+            Administrateur (peut gérer les utilisateurs)
+          </label>
+          <button class="btn brass" id="submit" type="submit" style="width:100%; justify-content:center;">Enregistrer le compte</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/assets/auth.js"></script>
+  <script>
+    if (!Auth.requireAuth()) { throw new Error('redirect'); }
+    if (!Auth.isAdmin()) { location.replace('/'); throw new Error('not admin'); }
+    Auth.renderUserBar(document.getElementById('userbar'));
+
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+    let toastT;
+    function toast(m) { const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1800); }
+    function msg(html, kind) { document.getElementById('msg').innerHTML = html ? `<div class="${kind==='err'?'error-box':'notice'}" style="margin-top:16px;">${html}</div>` : ''; }
+
+    async function loadUsers() {
+      const list = document.getElementById('list');
+      list.className = 'loading'; list.textContent = 'Chargement…';
+      try {
+        const res = await Auth.fetch('/api/users', { cache:'no-store' });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Erreur');
+        if (!data.users.length) { list.className=''; list.innerHTML = '<p style="color:var(--taupe); font-size:14px;">Aucun compte pour l\'instant. Ajoute le premier ci-contre.</p>'; return; }
+        list.className = '';
+        list.innerHTML = data.users.map(u => `
+          <div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line);">
+            <div style="flex:1;">
+              <div style="font-weight:600; font-size:14.5px;">${esc(u.username)} ${u.admin ? '<span class="badge sheet" style="margin-left:6px;">admin</span>' : ''}</div>
+              ${u.name ? `<div style="font-size:12.5px; color:var(--taupe);">${esc(u.name)}</div>` : ''}
+            </div>
+            <button class="btn small" data-edit="${esc(u.username)}" data-name="${esc(u.name)}" data-admin="${u.admin?1:0}">Modifier</button>
+            <button class="btn small danger" data-del="${esc(u.username)}">Supprimer</button>
+          </div>`).join('');
+        list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => delUser(b.getAttribute('data-del'))));
+        list.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
+          document.getElementById('f-username').value = b.getAttribute('data-edit');
+          document.getElementById('f-name').value = b.getAttribute('data-name') || '';
+          document.getElementById('f-admin').checked = b.getAttribute('data-admin') === '1';
+          document.getElementById('f-password').value = '';
+          document.getElementById('f-password').placeholder = 'laisser vide = inchangé';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }));
+      } catch (err) {
+        list.className = '';
+        list.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      }
+    }
+
+    async function delUser(username) {
+      if (!confirm(`Supprimer le compte « ${username} » ?`)) return;
+      if (username === Auth.user()) { toast('Tu ne peux pas supprimer ton propre compte'); return; }
+      const res = await Auth.fetch('/api/users?username=' + encodeURIComponent(username), { method:'DELETE' });
+      const data = await res.json().catch(()=>({}));
+      if (data.ok) { toast('Compte supprimé'); loadUsers(); } else { toast(data.error || 'Erreur'); }
+    }
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit'); btn.disabled = true;
+      const payload = {
+        username: document.getElementById('f-username').value,
+        name: document.getElementById('f-name').value,
+        password: document.getElementById('f-password').value,
+        admin: document.getElementById('f-admin').checked,
+      };
+      try {
+        const res = await Auth.fetch('/api/users', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!data.ok) { msg(esc(data.error || 'Erreur'), 'err'); }
+        else {
+          msg('', ''); toast('Compte enregistré');
+          document.getElementById('form').reset();
+          document.getElementById('f-password').placeholder = 'mot de passe';
+          loadUsers();
+        }
+      } catch (err) { msg(esc(err.message), 'err'); }
+      btn.disabled = false;
+    });
+
+    loadUsers();
+  </script>
+</body>
+</html>

@@ -59,7 +59,7 @@
           btn.disabled = false; btn.textContent = 'Se connecter';
           return;
         }
-        Auth.setSession(data.token, data.user);
+        Auth.setSession(data.token, data.user, data.admin);
         location.replace('/');
       } catch (err) {
         showError('Erreur réseau — réessaie.');
