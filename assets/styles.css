@@ -146,6 +146,9 @@ h1 { font-family: var(--serif); font-weight: 600; letter-spacing: -.01em; font-s
 /* --- Cartes commerciaux (posts) --- */
 .posts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 @media (max-width: 720px) { .posts { grid-template-columns: 1fr; } }
+/* Un seul bloc visible (utilisateur non admin) : on le centre sur une largeur
+   de lecture confortable au lieu de le laisser calé à gauche en demi-colonne. */
+.posts.single { grid-template-columns: min(660px, 100%); justify-content: center; }
 .post { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
 .post-top { display: flex; align-items: center; gap: 11px; padding: 15px 16px 8px; }
 .avatar { width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 16px; color: #fff; font-family: var(--serif); }

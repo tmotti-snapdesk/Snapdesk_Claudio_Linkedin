@@ -280,9 +280,10 @@
       const intro = Auth.isAdmin()
         ? `Clique sur « ✨ Générer le post » du commercial voulu. Les posts se créent <b>un par un, à la demande</b> (pour ménager le quota de l'API).`
         : `Ton bloc de création. Clique sur « ✨ Générer le post » pour créer ta publication.`;
+      const single = VISIBLE_COMS.length === 1 ? ' single' : '';
       zone.innerHTML =
         `<div class="notice">${intro}</div>` +
-        `<div class="posts">${
+        `<div class="posts${single}">${
           VISIBLE_COMS.map(c => cardShell(
             c,
             `<span style="color:var(--taupe); font-style:italic;">Pas encore généré.</span>`,
