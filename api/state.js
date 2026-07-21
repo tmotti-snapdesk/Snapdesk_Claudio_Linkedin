@@ -89,7 +89,24 @@ export default async function handler(req, res) {
 
       if (op === 'savePost') {
         if (!space || !commercial) return res.status(400).json({ ok: false, error: 'space + commercial requis' });
-        await kvSet(`post:${space}:${commercial}:${me}`, { content: String(content == null ? '' : content), by: session.user });
+        if (session.admin) {
+          // Un admin édite le contenu AFFICHÉ (le plus récent) : on réécrit SUR
+          // LA CLÉ D'ORIGINE (celle de l'utilisateur) pour que la modification
+          // apparaisse chez lui. Si aucun contenu n'existe encore, l'admin crée le sien.
+          const rows = await kvList(`post:${space}:${commercial}:`);
+          const candidates = rows.map((r) => ({ key: r.key, by: (r.value && r.value.by) || '', ts: tsOf(r) }));
+          const legacy = await kvGet(`post:${space}:${commercial}`);
+          if (legacy) candidates.push({ key: `post:${space}:${commercial}`, by: legacy.by || '', ts: 0 });
+          candidates.sort((a, b) => b.ts - a.ts);
+          if (candidates.length) {
+            const t = candidates[0];
+            await kvSet(t.key, { content: String(content == null ? '' : content), by: t.by || session.user });
+          } else {
+            await kvSet(`post:${space}:${commercial}:${me}`, { content: String(content == null ? '' : content), by: session.user });
+          }
+        } else {
+          await kvSet(`post:${space}:${commercial}:${me}`, { content: String(content == null ? '' : content), by: session.user });
+        }
       } else if (op === 'deletePost') {
         if (!space || !commercial) return res.status(400).json({ ok: false, error: 'space + commercial requis' });
         if (session.admin) {
