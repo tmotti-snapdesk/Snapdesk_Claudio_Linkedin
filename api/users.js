@@ -34,6 +34,9 @@ export default async function handler(req, res) {
           name: (r.value && r.value.name) || '',
           admin: !!(r.value && r.value.admin),
           commercial: (r.value && r.value.commercial) || '',
+          role: (r.value && r.value.role) || '',
+          bio: (r.value && r.value.bio) || '',
+          verified: (r.value && r.value.verified) !== false,
         }))
         .sort((a, b) => a.username.localeCompare(b.username));
       return res.status(200).json({ ok: true, users });
@@ -67,10 +70,19 @@ export default async function handler(req, res) {
         commercial = (existing && existing.commercial) || '';
       }
 
+      // Rôle (métadonnée, ex. inscription self-service). Absent du corps → conservé.
+      const role = (body && Object.prototype.hasOwnProperty.call(body, 'role'))
+        ? String(body.role || '').trim()
+        : ((existing && existing.role) || '');
+
+      // Métadonnées conservées si non fournies (bio & état de vérification).
+      const bio = (existing && existing.bio) || '';
+      const verified = existing ? (existing.verified !== false) : true;
+
       // Nouveau mot de passe si fourni, sinon on conserve le hash existant.
       const hash = password ? hashPassword(password) : existing.hash;
-      await kvSet(`user:${username}`, { hash, name, admin, commercial });
-      return res.status(200).json({ ok: true, user: { username, name, admin, commercial } });
+      await kvSet(`user:${username}`, { hash, name, admin, commercial, role, bio, verified });
+      return res.status(200).json({ ok: true, user: { username, name, admin, commercial, role } });
     }
 
     if (req.method === 'DELETE') {

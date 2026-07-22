@@ -26,7 +26,70 @@
       </div>
 
       <button class="btn brass" id="submit" type="submit">Se connecter</button>
+
+      <p class="signup-hint">Nouveau chez Snapdesk ? <button type="button" id="open-signup" class="linklike">Créer un compte</button></p>
     </form>
+  </div>
+
+  <!-- Pop-up d'inscription (2 étapes) — réservée aux e-mails @snapdesk.co -->
+  <div id="signup-modal" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="signup-title">
+      <div class="modal-head">
+        <h3 id="signup-title">Créer un compte</h3>
+        <button class="modal-close" id="signup-close" aria-label="Fermer" type="button">✕</button>
+      </div>
+
+      <div class="login-error" id="signup-error"></div>
+
+      <!-- Étape 1 : identité + identifiants -->
+      <div id="signup-step1">
+        <p class="steps">Étape 1 / 2 — tes informations</p>
+        <div class="row2">
+          <div class="login-field"><label for="su-first">Prénom</label>
+            <input id="su-first" type="text" autocomplete="given-name" placeholder="Prénom"></div>
+          <div class="login-field"><label for="su-last">Nom</label>
+            <input id="su-last" type="text" autocomplete="family-name" placeholder="Nom"></div>
+        </div>
+        <div class="login-field"><label for="su-email">Adresse e-mail professionnelle</label>
+          <input id="su-email" type="email" autocomplete="email" placeholder="prenom.nom@snapdesk.co">
+          <span class="fieldhint">Réservé aux adresses <b>@snapdesk.co</b>.</span></div>
+        <div class="login-field"><label for="su-pass">Mot de passe</label>
+          <input id="su-pass" type="password" autocomplete="new-password" placeholder="8 caractères minimum"></div>
+        <button class="btn brass" id="su-next" type="button" style="width:100%; justify-content:center; margin-top:6px;">Suivant →</button>
+      </div>
+
+      <!-- Étape 2 : rôle + à-propos -->
+      <div id="signup-step2" style="display:none;">
+        <p class="steps">Étape 2 / 2 — ton rôle chez Snapdesk</p>
+        <div class="login-field"><label for="su-role">Mon rôle chez Snapdesk</label>
+          <select id="su-role">
+            <option value="">— choisis ton rôle —</option>
+            <option>Marketing</option>
+            <option>Sales</option>
+            <option>Product Manager</option>
+            <option>Facility Manager</option>
+            <option>Architecte</option>
+            <option>Sourcing</option>
+          </select>
+        </div>
+        <div class="login-field"><label for="su-bio">Parle-nous un peu de toi <span style="font-weight:400; color:var(--taupe);">(optionnel)</span></label>
+          <textarea id="su-bio" rows="4" placeholder="Ce que tu fais au quotidien, ton ton de voix… ou colle 1–2 posts LinkedIn que tu as déjà écrits."></textarea>
+        </div>
+        <div class="notice" style="margin-top:2px;">ℹ️ Ces infos servent à mieux te connaître dès tes premières générations : plus on en sait sur ton métier et ta façon d'écrire, plus les posts proposés te ressemblent.</div>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button class="btn" id="su-back" type="button">← Retour</button>
+          <button class="btn brass" id="su-submit" type="button" style="flex:1; justify-content:center;">Créer mon compte</button>
+        </div>
+      </div>
+
+      <!-- Confirmation : e-mail de vérification envoyé -->
+      <div id="signup-done" style="display:none; text-align:center;">
+        <div style="font-size:40px; line-height:1; margin:6px 0 12px;">📩</div>
+        <h4 style="margin:0 0 8px; font-family:var(--serif); font-size:20px;">Vérifie ta boîte mail</h4>
+        <p style="color:var(--ink-soft); font-size:14px; line-height:1.6; margin:0 0 18px;">On a envoyé un lien d'activation à <b id="done-email"></b>. Clique dessus pour activer ton compte, puis connecte-toi.</p>
+        <button class="btn brass" id="su-finish" type="button" style="width:100%; justify-content:center;">J'ai compris</button>
+      </div>
+    </div>
   </div>
 
   <script src="/assets/auth.js"></script>
@@ -64,6 +127,75 @@
       } catch (err) {
         showError('Erreur réseau — réessaie.');
         btn.disabled = false; btn.textContent = 'Se connecter';
+      }
+    });
+
+    // ---------- Inscription (pop-up 2 étapes) ----------
+    const modal = document.getElementById('signup-modal');
+    const suErr = document.getElementById('signup-error');
+    const step1 = document.getElementById('signup-step1');
+    const step2 = document.getElementById('signup-step2');
+    const val = (id) => document.getElementById(id).value.trim();
+
+    function suError(msg) { suErr.textContent = msg || ''; suErr.classList.toggle('show', !!msg); }
+    function openSignup() {
+      suError(''); step1.style.display = ''; step2.style.display = 'none';
+      document.getElementById('signup-done').style.display = 'none';
+      modal.style.display = 'flex'; void modal.offsetWidth; modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false');
+      setTimeout(() => document.getElementById('su-first').focus(), 60);
+    }
+    function closeSignup() {
+      modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true');
+      setTimeout(() => { if (!modal.classList.contains('show')) modal.style.display = 'none'; }, 220);
+    }
+
+    document.getElementById('open-signup').addEventListener('click', openSignup);
+    document.getElementById('signup-close').addEventListener('click', closeSignup);
+    modal.addEventListener('click', (e) => { if (e.target.id === 'signup-modal') closeSignup(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('show')) closeSignup(); });
+
+    // Étape 1 → 2 : validation côté client (le serveur revalide de toute façon).
+    document.getElementById('su-next').addEventListener('click', () => {
+      const first = val('su-first'), last = val('su-last'), email = val('su-email').toLowerCase(), pass = document.getElementById('su-pass').value;
+      if (!first || !last) return suError('Indique ton prénom et ton nom.');
+      if (!/^[a-z0-9][a-z0-9._+-]*@snapdesk\.co$/.test(email)) return suError('Une adresse e-mail @snapdesk.co est requise.');
+      if (pass.length < 8) return suError('Mot de passe : 8 caractères minimum.');
+      suError('');
+      step1.style.display = 'none'; step2.style.display = '';
+      setTimeout(() => document.getElementById('su-role').focus(), 40);
+    });
+    document.getElementById('su-back').addEventListener('click', () => { suError(''); step2.style.display = 'none'; step1.style.display = ''; });
+    document.getElementById('su-finish').addEventListener('click', closeSignup);
+
+    // Étape 2 : création du compte (→ vérification e-mail, ou auto-connexion en secours).
+    document.getElementById('su-submit').addEventListener('click', async () => {
+      const role = val('su-role');
+      if (!role) return suError('Choisis ton rôle.');
+      const sub = document.getElementById('su-submit'); sub.disabled = true; sub.textContent = 'Création…';
+      try {
+        const res = await fetch('/api/signup', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            firstName: val('su-first'), lastName: val('su-last'),
+            email: val('su-email').toLowerCase(), password: document.getElementById('su-pass').value,
+            role, bio: document.getElementById('su-bio').value.trim(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) { suError(data.error || 'Inscription impossible.'); sub.disabled = false; sub.textContent = 'Créer mon compte'; return; }
+        if (data.pending) {
+          // Vérification e-mail requise : on affiche l'écran "vérifie ta boîte mail".
+          document.getElementById('done-email').textContent = data.email || val('su-email').toLowerCase();
+          step1.style.display = 'none'; step2.style.display = 'none';
+          document.getElementById('signup-done').style.display = '';
+          sub.disabled = false; sub.textContent = 'Créer mon compte';
+          return;
+        }
+        // Pas de vérification e-mail : auto-connexion.
+        Auth.setSession(data.token, data.user, data.admin, '');
+        location.replace('/');
+      } catch (err) {
+        suError('Erreur réseau — réessaie.'); sub.disabled = false; sub.textContent = 'Créer mon compte';
       }
     });
   </script>

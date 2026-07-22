@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snapdesk LinkedIn — Vérification</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏢%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="login-screen">
+    <div class="login-card" style="text-align:center;">
+      <p class="eyebrow">Snapdesk · Générateur LinkedIn</p>
+      <h1 id="title">Vérification…</h1>
+      <p class="sub" id="msg">Un instant, on active ton compte.</p>
+      <a class="btn brass" id="cta" href="/login.html" style="width:100%; justify-content:center; display:none;">Se connecter</a>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token') || '';
+    const title = document.getElementById('title');
+    const msg = document.getElementById('msg');
+    const cta = document.getElementById('cta');
+
+    (async () => {
+      if (!token) { title.textContent = 'Lien invalide'; msg.textContent = "Ce lien de vérification est incomplet."; return; }
+      try {
+        const res = await fetch('/api/verify?token=' + encodeURIComponent(token), { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          title.textContent = 'Compte activé ✅';
+          msg.textContent = 'Ton adresse est confirmée. Tu peux maintenant te connecter.';
+          cta.style.display = '';
+        } else {
+          title.textContent = 'Vérification impossible';
+          msg.textContent = data.error || 'Le lien est invalide ou a expiré.';
+          cta.textContent = 'Retour à la connexion';
+          cta.style.display = '';
+        }
+      } catch {
+        title.textContent = 'Erreur réseau';
+        msg.textContent = 'Réessaie dans un instant.';
+        cta.textContent = 'Retour à la connexion';
+        cta.style.display = '';
+      }
+    })();
+  </script>
+</body>
+</html>
