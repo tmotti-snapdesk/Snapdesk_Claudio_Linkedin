@@ -63,7 +63,40 @@
     </div>
   </div>
 
+  <!-- Éditeur de persona (voix d'un utilisateur) -->
+  <div id="persona-modal" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="persona-title" style="max-width:640px;">
+      <div class="modal-head">
+        <h3 id="persona-title">Persona</h3>
+        <button class="modal-close" id="persona-close" type="button" aria-label="Fermer">✕</button>
+      </div>
+      <div id="persona-err" class="error-box" style="display:none; margin-bottom:12px;"></div>
+      <div style="display:grid; gap:12px; overflow:auto; padding-right:2px;">
+        <input type="hidden" id="p-key">
+        <div style="display:grid; grid-template-columns:1fr 1fr .7fr; gap:10px;">
+          <label class="pf">Nom<input id="p-name"></label>
+          <label class="pf">Rôle<input id="p-role"></label>
+          <label class="pf">Température<input id="p-temp" type="number" step="0.05" min="0" max="1.5"></label>
+        </div>
+        <label class="pf">Ton de voix<textarea id="p-tone" rows="5"></textarea></label>
+        <label class="pf">Structure du post (template)<textarea id="p-template" rows="5"></textarea></label>
+        <label class="pf">Exemples de posts <span style="font-weight:400; color:var(--taupe);">(séparés par une ligne vide)</span><textarea id="p-examples" rows="5" placeholder="Colle un ou plusieurs posts de référence…"></textarea></label>
+        <label class="pf">Instructions complémentaires<textarea id="p-extra" rows="3"></textarea></label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="persona-cancel" type="button">Annuler</button>
+        <button class="btn validate" id="persona-save" type="button">✓ Enregistrer le persona</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"></div>
+
+  <style>
+    .pf { display:flex; flex-direction:column; gap:5px; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--taupe); font-weight:600; }
+    .pf input, .pf textarea { font-family:var(--sans); font-size:14px; text-transform:none; letter-spacing:normal; font-weight:400; color:var(--ink); background:var(--paper-2); border:1px solid var(--line); border-radius:9px; padding:9px 11px; width:100%; resize:vertical; }
+    .pf input:focus, .pf textarea:focus { outline:2px solid var(--brass-ink); outline-offset:1px; border-color:transparent; }
+  </style>
 
   <script src="/assets/auth.js"></script>
   <script>
@@ -71,9 +104,8 @@
     if (!Auth.isAdmin()) { location.replace('/'); throw new Error('not admin'); }
     Auth.renderUserBar(document.getElementById('userbar'));
 
-    // Blocs/personas disponibles (même liste que les cartes des espaces).
-    const PERSONAS = [
-      { key: '',         name: '— aucun —' },
+    // Personas statiques (les 7 voix officielles).
+    const STATIC = [
       { key: 'ronan',    name: 'Ronan' },
       { key: 'cyril',    name: 'Cyril' },
       { key: 'melanie',  name: 'Mélanie' },
@@ -82,12 +114,33 @@
       { key: 'thomas',   name: 'Thomas' },
       { key: 'snapdesk', name: 'Snapdesk' },
     ];
-    const personaName = (k) => (PERSONAS.find(p => p.key === k) || {}).name || '';
-    // Remplit le menu déroulant des blocs.
-    document.getElementById('f-commercial').innerHTML =
-      PERSONAS.map(p => `<option value="${p.key}">${p.name}</option>`).join('');
+    let USERS = []; // dernière liste chargée (libellés de blocs + options du menu)
 
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+    // Libellé du bloc d'un utilisateur (persona statique, son propre bloc, ou celui d'un autre).
+    function blockLabel(u) {
+      const c = u.commercial;
+      if (!c) return 'aucun bloc';
+      const st = STATIC.find(p => p.key === c);
+      if (st) return st.name;
+      if (c === u.username) return 'bloc perso';
+      const other = USERS.find(x => x.username === c);
+      return other ? ((other.name || other.username) + ' (perso)') : c;
+    }
+
+    // (Ré)-remplit le menu « Bloc / persona attribué » : son propre bloc + 7 statiques + blocs perso existants.
+    function fillCommercialSelect() {
+      const perUser = USERS.filter(u => !u.admin && u.commercial === u.username);
+      const opts = [{ value: '', label: '— son propre bloc —' }]
+        .concat(STATIC.map(p => ({ value: p.key, label: p.name })))
+        .concat(perUser.map(u => ({ value: u.username, label: (u.name || u.username) + ' — perso' })));
+      const sel = document.getElementById('f-commercial');
+      const cur = sel.value;
+      sel.innerHTML = opts.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
+      sel.value = cur;
+    }
+    fillCommercialSelect();
     let toastT;
     function toast(m) { const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1800); }
     function msg(html, kind) { document.getElementById('msg').innerHTML = html ? `<div class="${kind==='err'?'error-box':'notice'}" style="margin-top:16px;">${html}</div>` : ''; }
@@ -99,12 +152,14 @@
         const res = await Auth.fetch('/api/users', { cache:'no-store' });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Erreur');
+        USERS = data.users || [];
+        fillCommercialSelect();
         if (!data.users.length) { list.className=''; list.innerHTML = '<p style="color:var(--taupe); font-size:14px;">Aucun compte pour l\'instant. Ajoute le premier ci-contre.</p>'; return; }
         list.className = '';
         const pending = data.users.filter(u => u.verified === false);
         const active = data.users.filter(u => u.verified !== false);
         const meta = (u) => `
-          <div style="font-weight:600; font-size:14.5px;">${esc(u.username)} ${u.admin ? '<span class="badge sheet" style="margin-left:6px;">admin</span>' : (u.commercial ? `<span class="badge" style="margin-left:6px;">${esc(personaName(u.commercial))}</span>` : '<span class="badge" style="margin-left:6px; opacity:.7;">aucun bloc</span>')}</div>
+          <div style="font-weight:600; font-size:14.5px;">${esc(u.username)} ${u.admin ? '<span class="badge sheet" style="margin-left:6px;">admin</span>' : `<span class="badge" style="margin-left:6px;${blockLabel(u)==='aucun bloc'?' opacity:.7;':''}">${esc(blockLabel(u))}</span>`}</div>
           ${(u.name || u.role) ? `<div style="font-size:12.5px; color:var(--taupe);">${esc(u.name)}${(u.name && u.role) ? ' · ' : ''}${u.role ? esc(u.role) : ''}</div>` : ''}
           ${u.bio ? `<div style="font-size:12px; color:var(--taupe); margin-top:3px; max-width:52ch; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${esc(u.bio)}">📝 ${esc(u.bio)}</div>` : ''}`;
 
@@ -119,9 +174,12 @@
               </div>`).join('')}
           </div>` : '';
 
+        const personaBtn = (u) => (!u.admin && u.commercial === u.username)
+          ? `<button class="btn small" data-persona="${esc(u.username)}" title="Voir / éditer sa voix">🎭 Persona</button>` : '';
         const activeHtml = active.length ? active.map(u => `
-          <div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line);">
-            <div style="flex:1;">${meta(u)}</div>
+          <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--line); flex-wrap:wrap;">
+            <div style="flex:1; min-width:180px;">${meta(u)}</div>
+            ${personaBtn(u)}
             <button class="btn small" data-edit="${esc(u.username)}" data-name="${esc(u.name)}" data-admin="${u.admin?1:0}" data-commercial="${esc(u.commercial||'')}">Modifier</button>
             <button class="btn small danger" data-del="${esc(u.username)}">Supprimer</button>
           </div>`).join('') : '<p style="color:var(--taupe); font-size:14px;">Aucun compte actif pour l\'instant.</p>';
@@ -130,6 +188,7 @@
         list.querySelectorAll('[data-approve]').forEach(b => b.addEventListener('click', () => approveUser(b.getAttribute('data-approve'))));
         list.querySelectorAll('[data-refuse]').forEach(b => b.addEventListener('click', () => refuseUser(b.getAttribute('data-refuse'))));
         list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => delUser(b.getAttribute('data-del'))));
+        list.querySelectorAll('[data-persona]').forEach(b => b.addEventListener('click', () => openPersonaEditor(b.getAttribute('data-persona'))));
         list.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
           document.getElementById('f-username').value = b.getAttribute('data-edit');
           document.getElementById('f-name').value = b.getAttribute('data-name') || '';
@@ -144,6 +203,58 @@
         list.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
       }
     }
+
+    // ---------- Éditeur de persona ----------
+    const pmodal = document.getElementById('persona-modal');
+    function openPersonaModal() { pmodal.style.display = 'flex'; void pmodal.offsetWidth; pmodal.classList.add('show'); pmodal.setAttribute('aria-hidden', 'false'); }
+    function closePersonaModal() { pmodal.classList.remove('show'); pmodal.setAttribute('aria-hidden', 'true'); setTimeout(() => { if (!pmodal.classList.contains('show')) pmodal.style.display = 'none'; }, 220); }
+    function pErr(m) { const e = document.getElementById('persona-err'); e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; }
+
+    async function openPersonaEditor(key) {
+      pErr('');
+      document.getElementById('persona-title').textContent = 'Persona — ' + key;
+      try {
+        const res = await Auth.fetch('/api/persona?key=' + encodeURIComponent(key), { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.ok) { pErr(data.error || 'Erreur'); openPersonaModal(); return; }
+        const p = data.persona || {};
+        document.getElementById('p-key').value = key;
+        document.getElementById('p-name').value = p.name || '';
+        document.getElementById('p-role').value = p.role || '';
+        document.getElementById('p-temp').value = (p.temperature != null ? p.temperature : 0.8);
+        document.getElementById('p-tone').value = p.toneOfVoice || '';
+        document.getElementById('p-template').value = p.template || '';
+        document.getElementById('p-examples').value = Array.isArray(p.examples) ? p.examples.join('\n\n') : (p.examples || '');
+        document.getElementById('p-extra').value = p.extraInstructions || '';
+        openPersonaModal();
+      } catch { pErr('Erreur réseau'); openPersonaModal(); }
+    }
+
+    async function savePersona() {
+      const btn = document.getElementById('persona-save'); btn.disabled = true; pErr('');
+      const payload = {
+        key: document.getElementById('p-key').value,
+        name: document.getElementById('p-name').value,
+        role: document.getElementById('p-role').value,
+        temperature: document.getElementById('p-temp').value,
+        toneOfVoice: document.getElementById('p-tone').value,
+        template: document.getElementById('p-template').value,
+        examples: document.getElementById('p-examples').value,
+        extraInstructions: document.getElementById('p-extra').value,
+      };
+      try {
+        const res = await Auth.fetch('/api/persona', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!data.ok) { pErr(data.error || 'Erreur'); btn.disabled = false; return; }
+        toast('Persona enregistré'); closePersonaModal(); loadUsers();
+      } catch { pErr('Erreur réseau'); }
+      btn.disabled = false;
+    }
+
+    document.getElementById('persona-close').addEventListener('click', closePersonaModal);
+    document.getElementById('persona-cancel').addEventListener('click', closePersonaModal);
+    document.getElementById('persona-save').addEventListener('click', savePersona);
+    pmodal.addEventListener('click', (e) => { if (e.target.id === 'persona-modal') closePersonaModal(); });
 
     async function approveUser(username) {
       const res = await Auth.fetch('/api/users', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ username, action:'approve' }) });

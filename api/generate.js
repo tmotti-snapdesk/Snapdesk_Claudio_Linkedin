@@ -21,16 +21,23 @@ import { COMMERCIALS, COMMERCIAL_KEYS, getCommercial } from '../lib/commercials/
 import { buildUserPersona } from '../lib/persona.js';
 import { generatePost, MODEL } from '../lib/llm.js';
 import { requireActiveUser } from '../lib/auth.js';
-import { kvGet } from '../lib/store.js';
+import { kvGet, kvSet } from '../lib/store.js';
 import { fetchHubspotContext } from '../lib/hubspot.js';
 
-// Résout une clé de bloc : persona statique (ronan…) OU bloc PERSONNEL (fiche user).
+// Résout une clé de bloc : persona statique (ronan…) OU persona PERSONNEL enregistré
+// (persona:<key>). Repli : construit depuis la fiche user et le matérialise.
 async function resolveCommercial(key) {
   const c = getCommercial(key);
   if (c) return c;
   try {
+    const stored = await kvGet(`persona:${key}`);
+    if (stored && stored.toneOfVoice) return stored;
     const rec = await kvGet(`user:${key}`);
-    if (rec) return buildUserPersona({ key, name: rec.name, role: rec.role, bio: rec.bio });
+    if (rec) {
+      const built = buildUserPersona({ key, name: rec.name, role: rec.role, bio: rec.bio });
+      try { await kvSet(`persona:${key}`, built); } catch { /* best effort */ }
+      return built;
+    }
   } catch { /* store injoignable */ }
   return null;
 }

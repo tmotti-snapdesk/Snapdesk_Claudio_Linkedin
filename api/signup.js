@@ -13,6 +13,7 @@
 
 import { hashPassword } from '../lib/auth.js';
 import { kvGet, kvSet, isConfigured } from '../lib/store.js';
+import { buildUserPersona } from '../lib/persona.js';
 
 export const ROLES = ['Marketing', 'Sales', 'Product Manager', 'Facility Manager', 'Architecte', 'Sourcing'];
 
@@ -69,6 +70,8 @@ export default async function handler(req, res) {
     const commercial = email;
     // Compte EN ATTENTE : un admin doit l'approuver (verified:true) pour l'activer.
     await kvSet(`user:${email}`, { hash: hashPassword(password), name, admin: false, commercial, role, bio, verified: false });
+    // Le persona (voix) est CRÉÉ et enregistré en même temps que le compte.
+    await kvSet(`persona:${email}`, buildUserPersona({ key: email, name, role, bio }));
 
     return res.status(200).json({ ok: true, pending: true, email });
   } catch (err) {

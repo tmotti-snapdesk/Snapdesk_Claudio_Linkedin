@@ -12,6 +12,7 @@
 import { requireActiveAdmin, hashPassword } from '../lib/auth.js';
 import { kvGet, kvList, kvSet, kvDel, isConfigured } from '../lib/store.js';
 import { COMMERCIAL_KEYS } from '../lib/commercials/index.js';
+import { buildUserPersona } from '../lib/persona.js';
 
 export default async function handler(req, res) {
   const session = await requireActiveAdmin(req, res);
@@ -90,6 +91,12 @@ export default async function handler(req, res) {
       // Nouveau mot de passe si fourni, sinon on conserve le hash existant.
       const hash = password ? hashPassword(password) : existing.hash;
       await kvSet(`user:${username}`, { hash, name, admin, commercial, role, bio, verified });
+
+      // Le persona est CRÉÉ en même temps que le compte (si bloc perso et pas déjà là).
+      if (commercial === username) {
+        const hasPersona = await kvGet(`persona:${username}`);
+        if (!hasPersona) await kvSet(`persona:${username}`, buildUserPersona({ key: username, name, role, bio }));
+      }
       return res.status(200).json({ ok: true, user: { username, name, admin, commercial, role } });
     }
 
