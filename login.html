@@ -122,7 +122,7 @@
           btn.disabled = false; btn.textContent = 'Se connecter';
           return;
         }
-        Auth.setSession(data.token, data.user, data.admin, data.commercial);
+        Auth.setSession(data.token, data.user, data.admin, data.commercial, data.name, data.role);
         location.replace('/');
       } catch (err) {
         showError('Erreur réseau — réessaie.');

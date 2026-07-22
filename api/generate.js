@@ -18,9 +18,22 @@
 // ---------------------------------------------------------------------------
 
 import { COMMERCIALS, COMMERCIAL_KEYS, getCommercial } from '../lib/commercials/index.js';
+import { buildUserPersona } from '../lib/persona.js';
 import { generatePost, MODEL } from '../lib/llm.js';
 import { requireActiveUser } from '../lib/auth.js';
+import { kvGet } from '../lib/store.js';
 import { fetchHubspotContext } from '../lib/hubspot.js';
+
+// Résout une clé de bloc : persona statique (ronan…) OU bloc PERSONNEL (fiche user).
+async function resolveCommercial(key) {
+  const c = getCommercial(key);
+  if (c) return c;
+  try {
+    const rec = await kvGet(`user:${key}`);
+    if (rec) return buildUserPersona({ key, name: rec.name, role: rec.role, bio: rec.bio });
+  } catch { /* store injoignable */ }
+  return null;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -82,7 +95,7 @@ export default async function handler(req, res) {
   // --- Génération en parallèle (une erreur sur un commercial n'impacte pas les autres) ---
   const entries = await Promise.all(
     requested.map(async (key) => {
-      const commercial = getCommercial(key);
+      const commercial = await resolveCommercial(key);
       if (!commercial) return [key, { error: 'Commercial inconnu' }];
       if (!commercial.active) {
         return [key, {

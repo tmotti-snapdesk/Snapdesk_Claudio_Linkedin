@@ -52,8 +52,39 @@
       { key: 'snapdesk', name: 'Snapdesk', role: 'Compte officiel · l\'entreprise',       color: '#0E9E6E' },
     ];
 
-    // Blocs visibles : un admin voit TOUT ; un non-admin ne voit QUE son bloc attribué.
-    const VISIBLE_COMS = Auth.isAdmin() ? COMS : COMS.filter(c => c.key === Auth.commercial());
+    // --- Blocs personnels : chaque utilisateur a SA propre carte (clé = son pseudo).
+    // Les 7 personas statiques ci-dessus restent réutilisables.
+    const staticCom = (key) => COMS.find(c => c.key === String(key || '').toLowerCase());
+    function colorFor(key) { let h = 0; const s = String(key || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return `hsl(${h % 360} 45% 42%)`; }
+    function comFor(key, name, role) {
+      if (!key) return null;
+      const st = staticCom(key);
+      if (st) return st;
+      return { key: String(key).toLowerCase(), name: (name && name.trim()) || key, role: (role && role.trim()) || 'Snapdesk', color: colorFor(key) };
+    }
+    let VISIBLE_COMS = [];
+    const findCom = (key) => VISIBLE_COMS.find(c => c.key === String(key || '').toLowerCase()) || comFor(key);
+
+    // Un non-admin ne voit QUE son bloc perso ; un admin voit les 7 personas + le
+    // bloc perso de chaque utilisateur actif (pour superviser / éditer leur contenu).
+    async function buildVisibleComs() {
+      if (!Auth.isAdmin()) {
+        const me = comFor(Auth.commercial(), Auth.name() || Auth.user(), Auth.role());
+        VISIBLE_COMS = me ? [me] : [];
+        return;
+      }
+      const list = COMS.slice();
+      try {
+        const res = await Auth.fetch('/api/users', { cache: 'no-store' });
+        const data = await res.json();
+        (data.users || []).forEach(u => {
+          if (u.admin || !u.commercial) return;
+          if (list.find(c => c.key === u.commercial)) return; // persona statique déjà présent
+          list.push(comFor(u.commercial, u.name || u.username, u.role));
+        });
+      } catch { /* /api/users indisponible → on garde au moins les personas statiques */ }
+      VISIBLE_COMS = list;
+    }
 
     const fmt = (s) => (s == null ? '' : String(s)).trim();
     const esc = (t) => fmt(t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -364,11 +395,12 @@
 
     // "Modifier" : ouvre la modale centrée avec le texte du post.
     function enterEdit(key) {
-      const com = COMS.find(c => c.key === key);
+      const com = findCom(key);
       if (!com) return;
       editingKey = key;
       const saved = loadSavedPosts()[key];
-      const bodyEl = document.querySelector(`#post-${key} .post-body`);
+      const bodyCard = document.getElementById(`post-${key}`);
+      const bodyEl = bodyCard ? bodyCard.querySelector('.post-body') : null;
       const current = (saved != null) ? saved : (bodyEl ? bodyEl.textContent : '');
       document.getElementById('edit-modal-title').textContent = `Modifier le post — ${com.name}`;
       const ta = document.getElementById('edit-modal-area');
@@ -380,7 +412,7 @@
     // "Valider" : sauvegarde (persisté) + met à jour la carte + ferme la modale.
     function saveEdit() {
       if (!editingKey) { closeEditModal(); return; }
-      const com = COMS.find(c => c.key === editingKey);
+      const com = findCom(editingKey);
       const text = String(document.getElementById('edit-modal-area').value).trim();
       if (text) {
         savePostText(editingKey, text);
@@ -419,7 +451,7 @@
     // Supprime le post d'un commercial (affichage + persistance) → carte au repos.
     function deleteOne(key) {
       removeSavedPost(key);
-      const com = COMS.find(c => c.key === key);
+      const com = findCom(key);
       setCardIdle(com);
       toast('Post supprimé');
     }
@@ -461,7 +493,7 @@
 
     // Génère (ou régénère) le post d'UN seul commercial → 1 requête API.
     async function generateOne(key) {
-      const com = COMS.find(c => c.key === key);
+      const com = findCom(key);
       const card = document.getElementById(`post-${key}`);
       if (!card) return;
       // Passe la carte en chargement + désactive ses boutons le temps de la requête.
@@ -504,6 +536,7 @@
         document.getElementById('head').innerHTML = `<div class="error-box">Aucun espace indiqué. <a href="/">Retour à la liste</a></div>`;
         return;
       }
+      await buildVisibleComs();
       // Mode "post général" (hors espace) : rien à charger côté Sheet.
       if (SPACE_ID === '__general__') {
         SPACE = { general: true };

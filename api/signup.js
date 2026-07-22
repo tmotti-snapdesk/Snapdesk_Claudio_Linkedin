@@ -16,18 +16,6 @@ import { kvGet, kvSet, isConfigured } from '../lib/store.js';
 
 export const ROLES = ['Marketing', 'Sales', 'Product Manager', 'Facility Manager', 'Architecte', 'Sourcing'];
 
-// Attribution AUTOMATIQUE du bloc/persona à partir du rôle déclaré à l'inscription.
-// (L'admin peut toujours le changer ensuite depuis la page Utilisateurs.)
-// Personas disponibles : ronan, cyril, melanie, florian, maxence, thomas, snapdesk.
-export const ROLE_TO_BLOCK = {
-  'Marketing': 'thomas',          // Head of Marketing & Growth
-  'Sales': 'florian',             // Business Developer / commercial
-  'Product Manager': 'cyril',     // Co-founder (vision produit / marché)
-  'Facility Manager': 'snapdesk', // voix de la marque / opérationnel
-  'Architecte': 'snapdesk',       // met en scène les espaces
-  'Sourcing': 'ronan',            // CEO / acquisition
-};
-
 const EMAIL_RE = /^[a-z0-9][a-z0-9._+-]*@snapdesk\.co$/;
 const MIN_PASSWORD = 8;
 const MAX_BIO = 4000;
@@ -76,7 +64,9 @@ export default async function handler(req, res) {
     }
 
     const name = `${firstName} ${lastName}`.trim();
-    const commercial = ROLE_TO_BLOCK[role] || ''; // bloc attribué automatiquement selon le rôle
+    // Chaque utilisateur a SON PROPRE bloc : la clé du bloc = son e-mail. Sa voix
+    // dérive de son rôle (style) + sa bio (au moment de la génération).
+    const commercial = email;
     // Compte EN ATTENTE : un admin doit l'approuver (verified:true) pour l'activer.
     await kvSet(`user:${email}`, { hash: hashPassword(password), name, admin: false, commercial, role, bio, verified: false });
 

@@ -38,7 +38,7 @@ export default async function handler(req, res) {
         }
         const admin = !!rec.admin;
         const commercial = admin ? '' : (rec.commercial || '');
-        return res.status(200).json({ ok: true, token: issueToken(username, admin, commercial), user: username, admin, name: rec.name || '', commercial });
+        return res.status(200).json({ ok: true, token: issueToken(username, admin, commercial), user: username, admin, name: rec.name || '', role: rec.role || '', commercial });
       }
     } catch {
       /* Supabase indisponible → on tente le compte maître ci-dessous */

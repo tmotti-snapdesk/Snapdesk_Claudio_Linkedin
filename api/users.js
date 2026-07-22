@@ -68,15 +68,14 @@ export default async function handler(req, res) {
         return res.status(400).json({ ok: false, error: 'Mot de passe requis pour un nouveau compte' });
       }
 
-      // Bloc/persona attribué. Absent du corps → on conserve l'existant.
+      // Bloc/persona. Un persona statique choisi (ronan…) OU, par défaut, le bloc
+      // PERSONNEL de l'utilisateur (clé = son pseudo). Absent du corps → conservé.
       let commercial;
       if (body && Object.prototype.hasOwnProperty.call(body, 'commercial')) {
-        commercial = String(body.commercial || '').trim().toLowerCase();
-        if (commercial && !COMMERCIAL_KEYS.includes(commercial)) {
-          return res.status(400).json({ ok: false, error: 'Bloc/persona invalide' });
-        }
+        const c = String(body.commercial || '').trim().toLowerCase();
+        commercial = COMMERCIAL_KEYS.includes(c) ? c : username; // vide/invalide → bloc perso
       } else {
-        commercial = (existing && existing.commercial) || '';
+        commercial = (existing && existing.commercial) || username;
       }
 
       // Rôle (métadonnée, ex. inscription self-service). Absent du corps → conservé.
