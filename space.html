@@ -43,6 +43,7 @@
     Auth.renderUserBar(document.getElementById('userbar'));
 
     // Bouton « Mon persona » : chaque utilisateur peut ajuster sa voix / ajouter des posts.
+    // Placé dans la barre utilisateur, juste avant le bouton « Déconnexion ».
     (function () {
       if (Auth.isAdmin()) return;               // l'admin édite les personas depuis /users.html
       const key = Auth.commercial();
@@ -50,9 +51,10 @@
       const bar = document.getElementById('userbar');
       if (!bar) return;
       const btn = document.createElement('button');
-      btn.className = 'btn small'; btn.textContent = '🎭 Mon persona'; btn.style.marginRight = '8px';
+      btn.className = 'btn small'; btn.textContent = '🎭 Mon persona';
       btn.addEventListener('click', () => PersonaEditor.open(key, { title: Auth.name() || Auth.user(), toast: toast }));
-      bar.parentNode.insertBefore(btn, bar);
+      const logout = bar.querySelector('#logout-btn');
+      if (logout) bar.insertBefore(btn, logout); else bar.appendChild(btn);
     })();
 
     // --- Config commerciaux (ordre = affichage) ---

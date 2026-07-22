@@ -43,9 +43,24 @@
   <div id="toast" class="toast"></div>
 
   <script src="/assets/auth.js"></script>
+  <script src="/assets/persona-editor.js"></script>
   <script>
     if (!Auth.requireAuth()) { throw new Error('redirect'); }
     Auth.renderUserBar(document.getElementById('userbar'));
+
+    // Bouton « Mon persona » (non-admin), placé juste avant « Déconnexion ».
+    (function () {
+      if (Auth.isAdmin()) return;
+      const key = Auth.commercial();
+      if (!key) return;
+      const bar = document.getElementById('userbar');
+      if (!bar) return;
+      const btn = document.createElement('button');
+      btn.className = 'btn small'; btn.textContent = '🎭 Mon persona';
+      btn.addEventListener('click', () => PersonaEditor.open(key, { title: Auth.name() || Auth.user() }));
+      const logout = bar.querySelector('#logout-btn');
+      if (logout) bar.insertBefore(btn, logout); else bar.appendChild(btn);
+    })();
 
     const fmt = (s) => (s == null ? '' : String(s)).trim();
     const esc = (t) => fmt(t).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
